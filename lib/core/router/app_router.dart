@@ -1,0 +1,165 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../presentation/providers/providers.dart';
+import '../../presentation/screens/auth/forgot_password_screen.dart';
+import '../../presentation/screens/auth/login_screen.dart';
+import '../../presentation/screens/auth/signup_screen.dart';
+import '../../presentation/screens/dev/demo_selector_screen.dart';
+import '../../presentation/screens/dev/dev_tools_screen.dart';
+import '../../presentation/screens/history/history_screen.dart';
+import '../../presentation/screens/history/session_detail_screen.dart';
+import '../../presentation/screens/home/home_dashboard_screen.dart';
+import '../../presentation/screens/misc/about_app_screen.dart';
+import '../../presentation/screens/misc/delete_account_screen.dart';
+import '../../presentation/screens/misc/error_screen.dart';
+import '../../presentation/screens/misc/offline_screen.dart';
+import '../../presentation/screens/misc/permission_screen.dart';
+import '../../presentation/screens/misc/subscription_expired_screen.dart';
+import '../../presentation/screens/mixer/mixer_background_upload_screen.dart';
+import '../../presentation/screens/mixer/mixer_transport_screen.dart';
+import '../../presentation/screens/onboarding/get_started_screen.dart';
+import '../../presentation/screens/onboarding/onboarding_screen.dart';
+import '../../presentation/screens/profile/account_screen.dart';
+import '../../presentation/screens/profile/profile_screen.dart';
+import '../../presentation/screens/shell/app_shell.dart';
+import '../../presentation/screens/splash_screen.dart';
+import '../../presentation/screens/subscription/paywall_screen.dart';
+
+final routerProvider = Provider<GoRouter>((ref) {
+  final router = GoRouter(
+    initialLocation: '/splash',
+    redirect: (context, state) {
+      final online = ref.read(internetAvailableProvider).valueOrNull ?? true;
+      final location = state.matchedLocation;
+      if (!online && location != '/offline') {
+        return '/offline';
+      }
+      if (online && location == '/offline') {
+        return '/splash';
+      }
+      return null;
+    },
+    routes: [
+      GoRoute(
+        path: '/splash',
+        builder: (context, state) => SplashScreen(
+          debugPreview: state.uri.queryParameters['debug'] == '1',
+        ),
+      ),
+      GoRoute(
+        path: '/onboarding',
+        builder: (context, state) => OnboardingScreen(
+          replay: state.uri.queryParameters['replay'] == '1',
+        ),
+      ),
+      GoRoute(
+        path: '/get-started',
+        builder: (context, state) => const GetStartedScreen(),
+      ),
+      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(
+        path: '/signup',
+        builder: (context, state) => const SignupScreen(),
+      ),
+      GoRoute(
+        path: '/forgot',
+        builder: (context, state) => const ForgotPasswordScreen(),
+      ),
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) =>
+            AppShell(shell: navigationShell),
+        branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/home',
+                builder: (context, state) => const HomeDashboardScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/history',
+                builder: (context, state) => const HistoryScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/profile',
+                builder: (context, state) => const ProfileScreen(),
+              ),
+            ],
+          ),
+        ],
+      ),
+      GoRoute(
+        path: '/picker',
+        builder: (context, state) => const MixerBackgroundUploadScreen(),
+      ),
+      GoRoute(
+        path: '/mixer',
+        builder: (context, state) => const MixerTransportScreen(),
+      ),
+      GoRoute(
+        path: '/session/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          return SessionDetailScreen(sessionId: id);
+        },
+      ),
+      GoRoute(
+        path: '/paywall',
+        builder: (context, state) => const PaywallScreen(),
+      ),
+      GoRoute(
+        path: '/account',
+        builder: (context, state) => const AccountScreen(),
+      ),
+      GoRoute(
+        path: '/about',
+        builder: (context, state) => const AboutAppScreen(),
+      ),
+      GoRoute(
+        path: '/delete-account',
+        builder: (context, state) => const DeleteAccountScreen(),
+      ),
+      GoRoute(
+        path: '/permission',
+        builder: (context, state) => const PermissionScreen(),
+      ),
+      GoRoute(
+        path: '/offline',
+        builder: (context, state) => const OfflineScreen(),
+      ),
+      GoRoute(
+        path: '/subscription-expired',
+        builder: (context, state) => const SubscriptionExpiredScreen(),
+      ),
+      GoRoute(
+        path: '/error',
+        builder: (context, state) {
+          final msg = state.uri.queryParameters['msg'];
+          return ErrorScreen(message: msg);
+        },
+      ),
+      GoRoute(
+        path: '/demo-selector',
+        builder: (context, state) => const DemoSelectorScreen(),
+      ),
+      GoRoute(
+        path: '/dev-tools',
+        builder: (context, state) => const DevToolsScreen(),
+      ),
+    ],
+  );
+
+  ref.listen(internetAvailableProvider, (_, __) {
+    router.refresh();
+  });
+  ref.onDispose(router.dispose);
+  return router;
+});

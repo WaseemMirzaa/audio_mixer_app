@@ -1,0 +1,4 @@
+enum AppBackend {
+  mock,
+  firebase,
+}
