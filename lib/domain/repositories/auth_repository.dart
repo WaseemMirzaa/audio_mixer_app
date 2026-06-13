@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../models/app_user.dart';
 
 abstract class AuthRepository {
@@ -26,15 +28,21 @@ abstract class AuthRepository {
     String? preferredTheme,
     String? defaultPresetId,
     String? avatarUrl,
+    String? avatarFileName,
     bool clearAvatar = false,
   });
 
-  /// Persists the picked image at [localPath] as the signed-in user's avatar
-  /// and returns the value to store in [updateProfile.avatarUrl].
+  /// Uploads the avatar to storage and returns the public download URL and
+  /// the storage path (e.g. `avatars/uid.jpg`).
   ///
-  /// Firebase uploads the file to Cloud Storage (`avatars/{uid}`) and returns
-  /// the public download URL; the mock backend returns [localPath] unchanged.
-  Future<String> uploadAvatar(String localPath);
+  /// Pass [localPath] on mobile/desktop; pass [bytes] + [extension] on web.
+  /// Any previous avatar file for this user is deleted before the new one is
+  /// written, preventing orphaned files when the extension changes.
+  Future<({String url, String storagePath})> uploadAvatar(
+    String? localPath, {
+    Uint8List? bytes,
+    String? extension,
+  });
 
   Future<void> deleteAccount();
 }

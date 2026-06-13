@@ -4,6 +4,7 @@ class AppUser {
     required this.email,
     required this.displayName,
     this.avatarUrl,
+    this.avatarFileName,
     this.isGuest = false,
     this.onboardingCompleted = false,
     this.preferredTheme = 'system',
@@ -14,6 +15,11 @@ class AppUser {
   final String email;
   final String displayName;
   final String? avatarUrl;
+
+  /// Storage path of the avatar, e.g. `avatars/uid.jpg`. Used to find and
+  /// delete the file without listing all objects in the bucket.
+  final String? avatarFileName;
+
   final bool isGuest;
   final bool onboardingCompleted;
   final String preferredTheme;
@@ -24,6 +30,7 @@ class AppUser {
     String? email,
     String? displayName,
     String? avatarUrl,
+    String? avatarFileName,
     bool clearAvatar = false,
     bool? isGuest,
     bool? onboardingCompleted,
@@ -35,6 +42,8 @@ class AppUser {
       email: email ?? this.email,
       displayName: displayName ?? this.displayName,
       avatarUrl: clearAvatar ? null : (avatarUrl ?? this.avatarUrl),
+      avatarFileName:
+          clearAvatar ? null : (avatarFileName ?? this.avatarFileName),
       isGuest: isGuest ?? this.isGuest,
       onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
       preferredTheme: preferredTheme ?? this.preferredTheme,

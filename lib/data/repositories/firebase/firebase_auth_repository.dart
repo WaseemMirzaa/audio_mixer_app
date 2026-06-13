@@ -1,8 +1,10 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../domain/models/app_user.dart';
@@ -28,6 +30,7 @@ class FirebaseAuthRepository implements AuthRepository {
       email: u.email ?? '',
       displayName: data['displayName'] as String? ?? u.displayName ?? 'User',
       avatarUrl: data['avatarUrl'] as String?,
+      avatarFileName: data['avatarFileName'] as String?,
       isGuest: false,
       onboardingCompleted: data['onboardingCompleted'] as bool? ?? false,
       preferredTheme: data['preferredTheme'] as String? ?? 'system',
@@ -38,6 +41,19 @@ class FirebaseAuthRepository implements AuthRepository {
   Future<Map<String, dynamic>?> _profileDoc(String uid) async {
     final snap = await _db.collection('users').doc(uid).get();
     return snap.data();
+  }
+
+  /// Deletes all Storage objects whose basename (without extension) matches
+  /// [uid] inside the `avatars/` prefix. Safe to call even if none exist.
+  Future<void> _deleteAvatarFiles(String uid) async {
+    try {
+      final items = await _storage.ref().child('avatars').listAll();
+      await Future.wait(
+        items.items
+            .where((r) => p.basenameWithoutExtension(r.name) == uid)
+            .map((r) => r.delete()),
+      );
+    } catch (_) {}
   }
 
   @override
@@ -60,8 +76,8 @@ class FirebaseAuthRepository implements AuthRepository {
   Future<AppUser?> currentUser() async {
     final u = _auth.currentUser;
     if (u == null) return null;
-    final p = await _profileDoc(u.uid);
-    return _mapUser(u, p);
+    final profile = await _profileDoc(u.uid);
+    return _mapUser(u, profile);
   }
 
   @override
@@ -81,10 +97,24 @@ class FirebaseAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<String> uploadAvatar(String localPath) async {
+  Future<({String url, String storagePath})> uploadAvatar(
+    String? localPath, {
+    Uint8List? bytes,
+    String? extension,
+  }) async {
     final u = _auth.currentUser;
     if (u == null) throw StateError('Not signed in');
-    final ext = p.extension(localPath).toLowerCase();
+
+    final String ext;
+    if (extension != null && extension.isNotEmpty) {
+      ext = extension.toLowerCase();
+    } else if (localPath != null) {
+      final fromPath = p.extension(localPath).toLowerCase();
+      ext = fromPath.isEmpty ? '.jpg' : fromPath;
+    } else {
+      ext = '.jpg';
+    }
+
     final contentType = switch (ext) {
       '.png' => 'image/png',
       '.webp' => 'image/webp',
@@ -92,12 +122,28 @@ class FirebaseAuthRepository implements AuthRepository {
       '.heic' => 'image/heic',
       _ => 'image/jpeg',
     };
-    final ref = _storage.ref().child('avatars/${u.uid}$ext');
-    await ref.putFile(
-      File(localPath),
-      SettableMetadata(contentType: contentType),
-    );
-    return ref.getDownloadURL();
+
+    final storagePath = 'avatars/${u.uid}$ext';
+    final ref = _storage.ref().child(storagePath);
+
+    // Remove any previous avatar file (handles extension changes gracefully).
+    await _deleteAvatarFiles(u.uid);
+
+    // Upload: bytes-based on web, file-based on mobile/desktop.
+    if (kIsWeb || bytes != null) {
+      final data = bytes ?? Uint8List(0);
+      await ref.putData(data, SettableMetadata(contentType: contentType));
+    } else if (localPath != null) {
+      await ref.putFile(
+        File(localPath),
+        SettableMetadata(contentType: contentType),
+      );
+    } else {
+      throw ArgumentError('Provide either localPath or bytes');
+    }
+
+    final url = await ref.getDownloadURL();
+    return (url: url, storagePath: storagePath);
   }
 
   @override
@@ -105,14 +151,7 @@ class FirebaseAuthRepository implements AuthRepository {
     final u = _auth.currentUser;
     if (u == null) return;
     // Best-effort removal of the avatar object(s); ignore if none exist.
-    try {
-      final items = await _storage.ref().child('avatars').listAll();
-      await Future.wait(
-        items.items
-            .where((r) => p.basenameWithoutExtension(r.name) == u.uid)
-            .map((r) => r.delete()),
-      );
-    } catch (_) {}
+    await _deleteAvatarFiles(u.uid);
     await _db.collection('users').doc(u.uid).delete();
     await u.delete();
   }
@@ -178,6 +217,7 @@ class FirebaseAuthRepository implements AuthRepository {
     String? preferredTheme,
     String? defaultPresetId,
     String? avatarUrl,
+    String? avatarFileName,
     bool clearAvatar = false,
   }) async {
     final u = _auth.currentUser;
@@ -185,12 +225,21 @@ class FirebaseAuthRepository implements AuthRepository {
     if (displayName != null) {
       await u.updateDisplayName(displayName);
     }
+
+    // When clearing the avatar, also remove the file from Storage.
+    if (clearAvatar) {
+      await _deleteAvatarFiles(u.uid);
+    }
+
     await _db.collection('users').doc(u.uid).set({
       if (displayName != null) 'displayName': displayName,
       if (preferredTheme != null) 'preferredTheme': preferredTheme,
       if (defaultPresetId != null) 'defaultPresetId': defaultPresetId,
       if (clearAvatar) 'avatarUrl': FieldValue.delete(),
+      if (clearAvatar) 'avatarFileName': FieldValue.delete(),
       if (!clearAvatar && avatarUrl != null) 'avatarUrl': avatarUrl,
+      if (!clearAvatar && avatarFileName != null)
+        'avatarFileName': avatarFileName,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
