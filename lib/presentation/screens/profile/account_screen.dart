@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -16,9 +19,20 @@ class AccountScreen extends ConsumerStatefulWidget {
 
 class _AccountScreenState extends ConsumerState<AccountScreen> {
   late final TextEditingController _name;
+
+  // Mobile/desktop: file path; web: null.
   String? _pickedPath;
+
+  // Web: raw bytes from FilePicker; null on mobile/desktop.
+  Uint8List? _pickedBytes;
+
+  // Extension of the picked file, e.g. ".jpg" (populated on web pick).
+  String? _pickedExtension;
+
   bool _clearAvatar = false;
   bool _saving = false;
+
+  bool get _hasPendingAvatar => _pickedPath != null || _pickedBytes != null;
 
   @override
   void initState() {
@@ -34,19 +48,44 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
   }
 
   Future<void> _pickAvatar() async {
-    final res = await FilePicker.platform.pickFiles(type: FileType.image);
+    final res = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      // Load bytes on web (no file-system path available there).
+      withData: kIsWeb,
+    );
     if (res == null || res.files.isEmpty) return;
-    final path = res.files.single.path;
-    if (path == null) return;
-    setState(() {
-      _pickedPath = path;
-      _clearAvatar = false;
-    });
+    final file = res.files.single;
+
+    if (kIsWeb) {
+      final bytes = file.bytes;
+      if (bytes == null) return;
+      final name = file.name;
+      final dotIdx = name.lastIndexOf('.');
+      final ext =
+          dotIdx >= 0 ? '.${name.substring(dotIdx + 1).toLowerCase()}' : '.jpg';
+      setState(() {
+        _pickedBytes = bytes;
+        _pickedExtension = ext;
+        _pickedPath = null;
+        _clearAvatar = false;
+      });
+    } else {
+      final path = file.path;
+      if (path == null) return;
+      setState(() {
+        _pickedPath = path;
+        _pickedBytes = null;
+        _pickedExtension = null;
+        _clearAvatar = false;
+      });
+    }
   }
 
   void _removeAvatar() {
     setState(() {
       _pickedPath = null;
+      _pickedBytes = null;
+      _pickedExtension = null;
       _clearAvatar = true;
     });
   }
@@ -64,12 +103,20 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     final repo = ref.read(authRepositoryProvider);
     setState(() => _saving = true);
     try {
-      if (_pickedPath != null) {
-        // Upload the picked image (Firebase Storage in firebase mode; the
-        // local path is returned unchanged in mock mode) and store the URL.
-        final avatarUrl = await repo.uploadAvatar(_pickedPath!);
-        await repo.updateProfile(displayName: name, avatarUrl: avatarUrl);
+      if (_hasPendingAvatar) {
+        // Upload to Firebase Storage and store both URL + storage path in Firestore.
+        final result = await repo.uploadAvatar(
+          _pickedPath,
+          bytes: _pickedBytes,
+          extension: _pickedExtension,
+        );
+        await repo.updateProfile(
+          displayName: name,
+          avatarUrl: result.url,
+          avatarFileName: result.storagePath,
+        );
       } else if (_clearAvatar) {
+        // Removes avatar URL + file from Storage (handled in repository).
         await repo.updateProfile(displayName: name, clearAvatar: true);
       } else {
         await repo.updateProfile(displayName: name);
@@ -94,6 +141,10 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
   Widget build(BuildContext context) {
     final auth = ref.watch(authStateProvider).valueOrNull;
     final glass = SaGlass.of(context);
+
+    final hasExistingAvatar = auth?.avatarUrl?.isNotEmpty ?? false;
+    final showRemoveButton =
+        (_hasPendingAvatar || hasExistingAvatar) && !_clearAvatar;
 
     return SaGlassScaffold(
       header: SaBackHeader(
@@ -131,7 +182,8 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                       user: auth,
                       radius: 52,
                       localPathOverride: _pickedPath,
-                      preferInitials: _clearAvatar && _pickedPath == null,
+                      localBytesOverride: _pickedBytes,
+                      preferInitials: _clearAvatar && !_hasPendingAvatar,
                     ),
                   ),
                   Positioned(
@@ -162,9 +214,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                 ],
               ),
             ),
-            if ((_pickedPath != null ||
-                    (auth?.avatarUrl?.isNotEmpty ?? false)) &&
-                !_clearAvatar)
+            if (showRemoveButton)
               Center(
                 child: TextButton(
                   onPressed: _removeAvatar,
