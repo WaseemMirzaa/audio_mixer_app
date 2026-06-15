@@ -51,11 +51,15 @@ jobs:
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
 
-      - name: Upload to Firebase App Distribution
-        uses: wzieba/Firebase-Distribution-Github-Action@v1
+      - name: Create GitHub Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
         with:
-          appId: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
-          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
-          groups: testers
-          file: build/app/outputs/flutter-apk/app-release.apk
-          releaseNotes: "Build #${{ github.run_number }} from ${{ github.ref_name }} — ${{ github.sha }}"
+          tag_name: build-${{ github.run_number }}
+          name: "SoundAxis Build #${{ github.run_number }}"
+          body: |
+            **Commit:** ${{ github.sha }}
+            **Branch:** ${{ github.ref_name }}
+          files: build/app/outputs/flutter-apk/app-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
