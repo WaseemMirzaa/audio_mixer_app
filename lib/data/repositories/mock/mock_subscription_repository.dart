@@ -125,12 +125,6 @@ class MockSubscriptionRepository implements SubscriptionRepository {
   bool get simulatePurchaseFailure =>
       _prefs.getBool('mock_purchase_fail') ?? false;
 
-  bool get simulateOffline => _prefs.getBool(PrefsKeys.simulateOffline) ?? false;
-
-  Future<void> setSimulateOffline(bool v) async {
-    await _prefs.setBool(PrefsKeys.simulateOffline, v);
-  }
-
   bool get simulateSyncFail =>
       _prefs.getBool(PrefsKeys.simulateSyncFail) ?? false;
 

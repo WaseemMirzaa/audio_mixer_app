@@ -18,7 +18,6 @@ class DevToolsScreen extends ConsumerStatefulWidget {
 }
 
 class _DevToolsScreenState extends ConsumerState<DevToolsScreen> {
-  late bool _offline;
   late bool _syncFail;
   late bool _purchaseFail;
 
@@ -26,15 +25,8 @@ class _DevToolsScreenState extends ConsumerState<DevToolsScreen> {
   void initState() {
     super.initState();
     final prefs = ref.read(prefsProvider);
-    _offline = prefs.getBool(PrefsKeys.simulateOffline) ?? false;
     _syncFail = prefs.getBool(PrefsKeys.simulateSyncFail) ?? false;
     _purchaseFail = prefs.getBool('mock_purchase_fail') ?? false;
-  }
-
-  Future<void> _setOffline(bool v) async {
-    await ref.read(prefsProvider).setBool(PrefsKeys.simulateOffline, v);
-    ref.invalidate(simulateOfflineProvider);
-    setState(() => _offline = v);
   }
 
   Future<void> _setSyncFail(bool v) async {
@@ -72,11 +64,6 @@ class _DevToolsScreenState extends ConsumerState<DevToolsScreen> {
                       'Dev simulation toggles are available in mock mode.',
                     )
                   else ...[
-                    SwitchListTile(
-                      title: const Text('Simulate offline'),
-                      value: _offline,
-                      onChanged: _setOffline,
-                    ),
                     SwitchListTile(
                       title: const Text('Simulate sync failure on save'),
                       value: _syncFail,

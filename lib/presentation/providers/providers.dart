@@ -1,4 +1,3 @@
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -92,23 +91,6 @@ final mixerReadyProvider = StateProvider<bool>((ref) => false);
 
 final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.light);
 
-bool _hasNetwork(dynamic result) {
-  if (result is List<ConnectivityResult>) {
-    return result.any((r) => r != ConnectivityResult.none);
-  }
-  if (result is ConnectivityResult) {
-    return result != ConnectivityResult.none;
-  }
-  return true;
-}
-
-final internetAvailableProvider = StreamProvider<bool>((ref) async* {
-  final connectivity = Connectivity();
-  final initial = await connectivity.checkConnectivity();
-  yield _hasNetwork(initial);
-  yield* connectivity.onConnectivityChanged.map(_hasNetwork);
-});
-
 final sessionsProvider = FutureProvider<List<MixSession>>((ref) async {
   return ref.watch(sessionRepositoryProvider).listSessions();
 });
@@ -121,12 +103,6 @@ final sessionDetailProvider =
 
 final presetsProvider = FutureProvider<List<MixerPreset>>((ref) async {
   return ref.watch(presetRepositoryProvider).listPresets();
-});
-
-final simulateOfflineProvider = Provider<bool>((ref) {
-  final sub = ref.watch(subscriptionRepositoryProvider);
-  if (sub is MockSubscriptionRepository) return sub.simulateOffline;
-  return false;
 });
 
 final simulateSyncFailProvider = Provider<bool>((ref) {

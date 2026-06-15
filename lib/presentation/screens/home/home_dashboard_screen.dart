@@ -102,7 +102,6 @@ class _LightHomeDashboard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authStateProvider);
     final user = auth.valueOrNull;
-    final offline = ref.watch(simulateOfflineProvider);
     final sessions = ref.watch(sessionsProvider);
     final name = user?.displayName ?? 'Listener';
 
@@ -152,8 +151,6 @@ class _LightHomeDashboard extends ConsumerWidget {
                     ],
                   ),
                 ),
-                if (offline)
-                  _OfflineBanner(onDetails: () => context.push('/offline')),
                 Expanded(
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
@@ -363,7 +360,6 @@ class _DarkHomeDashboard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authStateProvider);
     final user = auth.valueOrNull;
-    final offline = ref.watch(simulateOfflineProvider);
     final sessions = ref.watch(sessionsProvider);
     final name = user?.displayName ?? 'Listener';
 
@@ -413,8 +409,6 @@ class _DarkHomeDashboard extends ConsumerWidget {
                     ],
                   ),
                 ),
-                if (offline)
-                  _OfflineBanner(onDetails: () => context.push('/offline')),
                 Expanded(
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
@@ -1008,44 +1002,4 @@ class _SessionList extends StatelessWidget {
   }
 }
 
-class _OfflineBanner extends StatelessWidget {
-  const _OfflineBanner({required this.onDetails});
-  final VoidCallback onDetails;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.orange.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.wifi_off_rounded, color: Colors.orange, size: 16),
-          const SizedBox(width: 8),
-          const Expanded(
-            child: Text(
-              'Offline — continuing locally.',
-              style: TextStyle(color: Colors.orange, fontSize: 13),
-            ),
-          ),
-          GestureDetector(
-            onTap: onDetails,
-            child: const Text(
-              'Details',
-              style: TextStyle(
-                color: Colors.orange,
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 

@@ -49,7 +49,6 @@ dependencies:
   http: ^1.6.0
   fl_chart: ^0.69.2
   font_awesome_flutter: ^11.0.0
-  connectivity_plus: ^6.1.5
   just_waveform: ^0.0.7
   path_provider: ^2.1.5
   path: ^1.9.1
