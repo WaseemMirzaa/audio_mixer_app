@@ -1,0 +1,19 @@
+rules_version = '2';
+
+// Cloud Storage security rules for Sound Axis.
+//
+// Deploy with:  firebase deploy --only storage
+//
+// Avatars are stored at `avatars/{uid}.{ext}`. Anyone can read an avatar (it is
+// shown via its download URL), but only the owner may upload/replace/delete
+// their own file. A new project's default locked rules deny all writes, which
+// makes avatar upload fail with `unauthorized` / `permission-denied`.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /avatars/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null
+                   && fileName.matches(request.auth.uid + '[.].*');
+    }
+  }
+}

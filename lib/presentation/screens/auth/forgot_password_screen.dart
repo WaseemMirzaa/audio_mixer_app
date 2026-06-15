@@ -46,15 +46,9 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       if (!mounted) return;
       setState(() => _sent = true);
     } on AuthException catch (e) {
-      setState(
-        () => _error = switch (e.code) {
-          'invalid-email' => 'Invalid email address.',
-          'user-not-found' => 'No account found with this email.',
-          _ => 'Could not send reset link. Please try again.',
-        },
-      );
-    } catch (_) {
-      setState(() => _error = 'Network error. Please try again.');
+      setState(() => _error = authErrorMessage(e));
+    } catch (e) {
+      setState(() => _error = 'Something went wrong. Please try again.\n($e)');
     } finally {
       if (mounted) setState(() => _loading = false);
     }

@@ -66,18 +66,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       if (!mounted) return;
       context.go('/home');
     } on AuthException catch (e) {
-      setState(
-        () => _error = switch (e.code) {
-          'email-already-in-use' => 'An account with this email already exists.',
-          'invalid-email' => 'Invalid email address.',
-          'weak-password' => 'Password is too weak. Use at least 6 characters.',
-          'operation-not-allowed' => 'Sign up is currently disabled.',
-          'network-request-failed' => 'Network error. Please try again.',
-          _ => 'Could not create account. Please try again.',
-        },
-      );
-    } catch (_) {
-      setState(() => _error = 'Network error. Please try again.');
+      setState(() => _error = authErrorMessage(e));
+    } catch (e) {
+      setState(() => _error = 'Something went wrong. Please try again.\n($e)');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
