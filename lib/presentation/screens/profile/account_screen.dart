@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../domain/repositories/auth_repository.dart';
 import '../../providers/providers.dart';
 import '../../widgets/sa_glass.dart';
 import '../../widgets/user_avatar.dart';
@@ -124,9 +125,10 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      messenger.showSnackBar(
-        SnackBar(content: Text('Could not update profile: $e')),
-      );
+      final msg = e is AuthException
+          ? authErrorMessage(e)
+          : 'Could not update profile: $e';
+      messenger.showSnackBar(SnackBar(content: Text(msg)));
       return;
     }
     if (!mounted) return;

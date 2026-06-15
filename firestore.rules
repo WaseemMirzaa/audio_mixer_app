@@ -1,0 +1,28 @@
+rules_version = '2';
+
+// Firestore security rules for Sound Axis.
+//
+// Deploy with:  firebase deploy --only firestore:rules
+//
+// A new Firebase project defaults to LOCKED rules (deny all), which makes every
+// profile read/write fail with `permission-denied` — surfacing in the app as a
+// generic error during sign-up / profile update. These rules grant each signed-in
+// user access to their own data.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Each user can read and write only their own profile document.
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Mix sessions and presets (used when the Firebase data backend is enabled).
+    // TODO: tighten to owner-only once an `ownerId` field is enforced on writes.
+    match /mix_sessions/{docId} {
+      allow read, write: if request.auth != null;
+    }
+    match /presets/{docId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

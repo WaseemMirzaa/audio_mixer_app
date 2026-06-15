@@ -55,28 +55,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (!mounted) return;
       context.go('/home');
     } on AuthException catch (e) {
-      setState(
-        () => _error = switch (e.code) {
-          'invalid-email' => 'Invalid email address.',
-          'wrong-password' || 'invalid-credential' => 'Incorrect email or password.',
-          'user-not-found' => 'No account found with this email.',
-          'user-disabled' => 'This account has been disabled.',
-          'too-many-requests' => 'Too many attempts. Please try again later.',
-          _ => 'Could not sign in. Please try again.',
-        },
-      );
-    } catch (_) {
-      setState(() => _error = 'Network error. Please try again.');
+      setState(() => _error = authErrorMessage(e));
+    } catch (e) {
+      setState(() => _error = 'Something went wrong. Please try again.\n($e)');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
   Future<void> _guest() async {
-    await ref.read(authRepositoryProvider).continueAsGuest();
-    ref.invalidate(sessionsProvider);
-    if (!mounted) return;
-    context.go('/home');
+    setState(() => _error = null);
+    try {
+      await ref.read(authRepositoryProvider).continueAsGuest();
+      ref.invalidate(sessionsProvider);
+      if (!mounted) return;
+      context.go('/home');
+    } on AuthException catch (e) {
+      setState(() => _error = authErrorMessage(e));
+    } catch (e) {
+      setState(() => _error = 'Something went wrong. Please try again.\n($e)');
+    }
   }
 
   @override
