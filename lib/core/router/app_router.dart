@@ -13,7 +13,6 @@ import '../../presentation/screens/home/home_dashboard_screen.dart';
 import '../../presentation/screens/misc/about_app_screen.dart';
 import '../../presentation/screens/misc/delete_account_screen.dart';
 import '../../presentation/screens/misc/error_screen.dart';
-import '../../presentation/screens/misc/offline_screen.dart';
 import '../../presentation/screens/misc/permission_screen.dart';
 import '../../presentation/screens/misc/subscription_expired_screen.dart';
 import '../../presentation/screens/mixer/mixer_background_upload_screen.dart';
@@ -29,17 +28,6 @@ import '../../presentation/screens/subscription/paywall_screen.dart';
 final routerProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
     initialLocation: '/splash',
-    redirect: (context, state) {
-      final online = ref.read(internetAvailableProvider).valueOrNull ?? true;
-      final location = state.matchedLocation;
-      if (!online && location != '/offline') {
-        return '/offline';
-      }
-      if (online && location == '/offline') {
-        return '/splash';
-      }
-      return null;
-    },
     routes: [
       GoRoute(
         path: '/splash',
@@ -132,10 +120,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const PermissionScreen(),
       ),
       GoRoute(
-        path: '/offline',
-        builder: (context, state) => const OfflineScreen(),
-      ),
-      GoRoute(
         path: '/subscription-expired',
         builder: (context, state) => const SubscriptionExpiredScreen(),
       ),
@@ -157,9 +141,6 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
   );
 
-  ref.listen(internetAvailableProvider, (_, __) {
-    router.refresh();
-  });
   ref.onDispose(router.dispose);
   return router;
 });
