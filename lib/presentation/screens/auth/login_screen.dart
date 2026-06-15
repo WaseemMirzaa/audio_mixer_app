@@ -15,13 +15,37 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _email = TextEditingController(text: 'demo@app.com');
-  final _password = TextEditingController(text: '123456');
+  final _email = TextEditingController();
+  final _password = TextEditingController();
 
+  bool _loading = false;
   String? _error;
 
+  static final _emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
+  String? _validate() {
+    final email = _email.text.trim();
+    final password = _password.text;
+
+    if (email.isEmpty) return 'Email is required.';
+    if (!_emailRegex.hasMatch(email)) return 'Enter a valid email address.';
+    if (password.isEmpty) return 'Password is required.';
+
+    return null;
+  }
+
   Future<void> _login() async {
-    setState(() => _error = null);
+    final validationError = _validate();
+    if (validationError != null) {
+      setState(() => _error = validationError);
+      return;
+    }
+
+    setState(() {
+      _error = null;
+      _loading = true;
+    });
+
     try {
       await ref
           .read(authRepositoryProvider)
@@ -34,12 +58,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       setState(
         () => _error = switch (e.code) {
           'invalid-email' => 'Invalid email address.',
-          'wrong-password' => 'Wrong password. Try demo@app.com / 123456',
-          _ => 'Could not sign in.',
+          'wrong-password' || 'invalid-credential' => 'Incorrect email or password.',
+          'user-not-found' => 'No account found with this email.',
+          'user-disabled' => 'This account has been disabled.',
+          'too-many-requests' => 'Too many attempts. Please try again later.',
+          _ => 'Could not sign in. Please try again.',
         },
       );
     } catch (_) {
-      setState(() => _error = 'Network error. Try again.');
+      setState(() => _error = 'Network error. Please try again.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -85,9 +114,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: const BookWithNotes(height: 300),
+              child: const BookWithNotes(height: 200),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 8),
             const SaHeading(
               title: 'Welcome Back',
               subtitle: 'Login to continue',
@@ -102,7 +131,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     strongFill: true,
                     controller: _email,
                     label: 'Email',
-                    hint: 'demo@app.com',
+                    hint: 'you@example.com',
                     keyboardType: TextInputType.emailAddress,
                   ),
                   const SizedBox(height: 12),
@@ -110,7 +139,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     strongFill: true,
                     controller: _password,
                     label: 'Password',
-                    hint: '********',
+                    hint: '••••••••',
                     obscure: true,
                     showVisibilityIcon: true,
                   ),
@@ -142,7 +171,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
             if (_error != null)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
                 child: Text(
                   _error!,
                   style: const TextStyle(
@@ -155,8 +184,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               child: SaPrimaryButton(
                 dark: true,
-                label: 'Login',
-                onPressed: _login,
+                label: _loading ? 'Signing in…' : 'Login',
+                onPressed: _loading ? null : _login,
               ),
             ),
             const SizedBox(height: 16),
@@ -164,7 +193,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  'Don’t have an account? ',
+                  'Don\'t have an account? ',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,

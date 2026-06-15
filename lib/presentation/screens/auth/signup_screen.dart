@@ -19,22 +19,45 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _email = TextEditingController();
   final _pw = TextEditingController();
   final _pw2 = TextEditingController();
-  bool _acceptedTerms = true;
+  bool _acceptedTerms = false;
+  bool _loading = false;
   String? _error;
 
+  static final _emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
+  String? _validate() {
+    final name = _name.text.trim();
+    final email = _email.text.trim();
+    final password = _pw.text;
+    final confirm = _pw2.text;
+
+    if (name.isEmpty) return 'Full name is required.';
+    if (email.isEmpty) return 'Email is required.';
+    if (!_emailRegex.hasMatch(email)) return 'Enter a valid email address.';
+    if (password.isEmpty) return 'Password is required.';
+    if (password.length < 6) return 'Password must be at least 6 characters.';
+    if (confirm.isEmpty) return 'Please confirm your password.';
+    if (password != confirm) return 'Passwords do not match.';
+    if (!_acceptedTerms) return 'Please agree to the Terms & Conditions.';
+
+    return null;
+  }
+
   Future<void> _submit() async {
-    setState(() => _error = null);
-    if (_pw.text != _pw2.text) {
-      setState(() => _error = 'Passwords do not match.');
+    final validationError = _validate();
+    if (validationError != null) {
+      setState(() => _error = validationError);
       return;
     }
-    if (!_acceptedTerms) {
-      setState(() => _error = 'Please agree to Terms & Conditions.');
-      return;
-    }
+
+    setState(() {
+      _error = null;
+      _loading = true;
+    });
+
     try {
       await ref.read(authRepositoryProvider).signUp(
-            displayName: _name.text,
+            displayName: _name.text.trim(),
             email: _email.text.trim(),
             password: _pw.text,
           );
@@ -43,9 +66,20 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       if (!mounted) return;
       context.go('/home');
     } on AuthException catch (e) {
-      setState(() => _error = e.code);
+      setState(
+        () => _error = switch (e.code) {
+          'email-already-in-use' => 'An account with this email already exists.',
+          'invalid-email' => 'Invalid email address.',
+          'weak-password' => 'Password is too weak. Use at least 6 characters.',
+          'operation-not-allowed' => 'Sign up is currently disabled.',
+          'network-request-failed' => 'Network error. Please try again.',
+          _ => 'Could not create account. Please try again.',
+        },
+      );
     } catch (_) {
-      setState(() => _error = 'Network error.');
+      setState(() => _error = 'Network error. Please try again.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -86,9 +120,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: const BookWithNotes(height: 300),
+              child: const BookWithNotes(height: 200),
             ),
-            // const SizedBox(height: 20),
+            const SizedBox(height: 8),
             const SaHeading(
               title: 'Create Account',
               subtitle: 'Sign up to get started',
@@ -110,7 +144,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     strongFill: true,
                     controller: _email,
                     label: 'Email',
-                    hint: 'demo@app.com',
+                    hint: 'you@example.com',
                     keyboardType: TextInputType.emailAddress,
                   ),
                   const SizedBox(height: 12),
@@ -118,7 +152,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     strongFill: true,
                     controller: _pw,
                     label: 'Password',
-                    hint: '********',
+                    hint: '••••••••',
                     obscure: true,
                     showVisibilityIcon: true,
                   ),
@@ -127,7 +161,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     strongFill: true,
                     controller: _pw2,
                     label: 'Confirm Password',
-                    hint: '********',
+                    hint: '••••••••',
                     obscure: true,
                     showVisibilityIcon: true,
                   ),
@@ -169,7 +203,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             ),
             if (_error != null)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
                 child: Text(
                   _error!,
                   style: const TextStyle(
@@ -182,8 +216,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               child: SaPrimaryButton(
                 dark: true,
-                label: 'Create Account',
-                onPressed: _submit,
+                label: _loading ? 'Creating account…' : 'Create Account',
+                onPressed: _loading ? null : _submit,
               ),
             ),
             const SizedBox(height: 16),
