@@ -2,6 +2,11 @@ import 'dart:typed_data';
 
 import '../models/app_user.dart';
 
+class AuthException implements Exception {
+  AuthException(this.code);
+  final String code;
+}
+
 abstract class AuthRepository {
   Stream<AppUser?> authState();
 

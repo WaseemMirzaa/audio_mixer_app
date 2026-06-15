@@ -224,7 +224,3 @@ class MockAuthRepository implements AuthRepository {
   void dispose() => _ctrl.close();
 }
 
-class AuthException implements Exception {
-  AuthException(this.code);
-  final String code;
-}
