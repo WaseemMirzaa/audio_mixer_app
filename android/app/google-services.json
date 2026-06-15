@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "611674831962",
+    "project_id": "soundaxis-7fa76",
+    "storage_bucket": "soundaxis-7fa76.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:611674831962:android:fdccb85f647e2c43b36c63",
+        "android_client_info": {
+          "package_name": "com.codetivelab.soundAxis"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyALO8GXwrerH6Ni-3z37IotYo_HGB-6CoM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
