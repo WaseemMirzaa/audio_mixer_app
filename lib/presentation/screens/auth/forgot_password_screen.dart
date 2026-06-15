@@ -136,7 +136,6 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: SaPrimaryButton(
-                  dark: true,
                   label: _loading ? 'Sending…' : 'Send Reset Link',
                   onPressed: _loading ? null : _send,
                 ),
