@@ -206,7 +206,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               child: SaPrimaryButton(
-                dark: true,
                 label: _loading ? 'Creating account…' : 'Create Account',
                 onPressed: _loading ? null : _submit,
               ),

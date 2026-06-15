@@ -181,7 +181,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               child: SaPrimaryButton(
-                dark: true,
                 label: _loading ? 'Signing in…' : 'Login',
                 onPressed: _loading ? null : _login,
               ),
