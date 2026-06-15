@@ -22,7 +22,7 @@ void main() async {
     handler = await AudioService.init(
       builder: () => MixerAudioHandler(),
       config: const AudioServiceConfig(
-        androidNotificationChannelId: 'com.example.audio_mixer_app.audio',
+        androidNotificationChannelId: 'com.codetivelab.soundAxis.audio',
         androidNotificationChannelName: 'Audio Mixer Playback',
         androidNotificationOngoing: true,
         androidStopForegroundOnPause: true,

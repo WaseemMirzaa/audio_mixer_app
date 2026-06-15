@@ -10,6 +10,7 @@ import 'package:path/path.dart' as p;
 import '../../../domain/models/app_user.dart';
 import '../../../domain/repositories/auth_repository.dart';
 
+
 class FirebaseAuthRepository implements AuthRepository {
   FirebaseAuthRepository({
     FirebaseAuth? auth,
@@ -82,18 +83,22 @@ class FirebaseAuthRepository implements AuthRepository {
 
   @override
   Future<void> continueAsGuest() async {
-    final cred = await _auth.signInAnonymously();
-    final u = cred.user!;
-    await _db.collection('users').doc(u.uid).set({
-      'uid': u.uid,
-      'email': '',
-      'displayName': 'Guest',
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-      'onboardingCompleted': false,
-      'preferredTheme': 'system',
-      'isPro': false,
-    }, SetOptions(merge: true));
+    try {
+      final cred = await _auth.signInAnonymously();
+      final u = cred.user!;
+      await _db.collection('users').doc(u.uid).set({
+        'uid': u.uid,
+        'email': '',
+        'displayName': 'Guest',
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'onboardingCompleted': false,
+        'preferredTheme': 'system',
+        'isPro': false,
+      }, SetOptions(merge: true));
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(e.code);
+    }
   }
 
   @override
@@ -168,7 +173,11 @@ class FirebaseAuthRepository implements AuthRepository {
 
   @override
   Future<void> sendPasswordResetEmail(String email) async {
-    await _auth.sendPasswordResetEmail(email: email.trim());
+    try {
+      await _auth.sendPasswordResetEmail(email: email.trim());
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(e.code);
+    }
   }
 
   @override
@@ -176,10 +185,14 @@ class FirebaseAuthRepository implements AuthRepository {
     required String email,
     required String password,
   }) async {
-    await _auth.signInWithEmailAndPassword(
-      email: email.trim(),
-      password: password,
-    );
+    try {
+      await _auth.signInWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
+      );
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(e.code);
+    }
   }
 
   @override
@@ -193,22 +206,26 @@ class FirebaseAuthRepository implements AuthRepository {
     required String email,
     required String password,
   }) async {
-    final cred = await _auth.createUserWithEmailAndPassword(
-      email: email.trim(),
-      password: password,
-    );
-    final u = cred.user!;
-    await u.updateDisplayName(displayName.trim());
-    await _db.collection('users').doc(u.uid).set({
-      'uid': u.uid,
-      'email': email.trim().toLowerCase(),
-      'displayName': displayName.trim(),
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-      'onboardingCompleted': true,
-      'preferredTheme': 'system',
-      'isPro': false,
-    });
+    try {
+      final cred = await _auth.createUserWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
+      );
+      final u = cred.user!;
+      await u.updateDisplayName(displayName.trim());
+      await _db.collection('users').doc(u.uid).set({
+        'uid': u.uid,
+        'email': email.trim().toLowerCase(),
+        'displayName': displayName.trim(),
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'onboardingCompleted': true,
+        'preferredTheme': 'system',
+        'isPro': false,
+      });
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(e.code);
+    }
   }
 
   @override
