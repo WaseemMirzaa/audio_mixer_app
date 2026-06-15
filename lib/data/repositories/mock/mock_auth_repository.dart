@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -30,6 +31,7 @@ class MockAuthRepository implements AuthRepository {
         email: m['email'] as String,
         displayName: m['displayName'] as String,
         avatarUrl: m['avatarUrl'] as String?,
+        avatarFileName: m['avatarFileName'] as String?,
         isGuest: m['isGuest'] as bool? ?? false,
         onboardingCompleted: m['onboardingCompleted'] as bool? ?? false,
         preferredTheme: m['preferredTheme'] as String? ?? 'system',
@@ -51,6 +53,7 @@ class MockAuthRepository implements AuthRepository {
         'email': u.email,
         'displayName': u.displayName,
         'avatarUrl': u.avatarUrl,
+        'avatarFileName': u.avatarFileName,
         'isGuest': u.isGuest,
         'onboardingCompleted': u.onboardingCompleted,
         'preferredTheme': u.preferredTheme,
@@ -160,6 +163,7 @@ class MockAuthRepository implements AuthRepository {
     String? preferredTheme,
     String? defaultPresetId,
     String? avatarUrl,
+    String? avatarFileName,
     bool clearAvatar = false,
   }) async {
     final u = _user;
@@ -177,7 +181,10 @@ class MockAuthRepository implements AuthRepository {
     if (clearAvatar) {
       next = next.copyWith(clearAvatar: true);
     } else if (avatarUrl != null) {
-      next = next.copyWith(avatarUrl: avatarUrl.isEmpty ? null : avatarUrl);
+      next = next.copyWith(
+        avatarUrl: avatarUrl.isEmpty ? null : avatarUrl,
+        avatarFileName: avatarFileName,
+      );
     }
     _user = next;
     _persist();
@@ -185,10 +192,15 @@ class MockAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<String> uploadAvatar(String localPath) async {
+  Future<({String url, String storagePath})> uploadAvatar(
+    String? localPath, {
+    Uint8List? bytes,
+    String? extension,
+  }) async {
     // Mock backend has no remote storage — the local file path is rendered
     // directly by [UserAvatar] via FileImage.
-    return localPath;
+    final path = localPath ?? 'mock_avatar${extension ?? '.jpg'}';
+    return (url: path, storagePath: path);
   }
 
   /// Dev / demo selector hooks (mock backend only).

@@ -32,7 +32,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: 'REPLACE_ME',
     projectId: 'REPLACE_ME',
     storageBucket: 'REPLACE_ME',
-    iosBundleId: 'com.example.audioMixerApp',
+    iosBundleId: 'com.codetivelab.soundAxis',
   );
 
   static const FirebaseOptions web = FirebaseOptions(

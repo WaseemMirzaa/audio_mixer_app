@@ -1,4 +1,4 @@
-package com.example.audio_mixer_app
+package com.codetivelab.soundAxis
 
 import android.media.audiofx.BassBoost
 import android.media.audiofx.Equalizer

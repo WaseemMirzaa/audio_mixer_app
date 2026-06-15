@@ -1,4 +1,4 @@
-package com.example.audio_mixer_app
+package com.codetivelab.soundAxis
 
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -8,7 +8,7 @@ import io.flutter.plugin.common.MethodChannel
 // AudioService can communicate with the Flutter engine over IPC.
 class MainActivity : AudioServiceActivity() {
 
-    private val channelName = "com.example.audio_mixer_app/audio_effects"
+    private val channelName = "com.codetivelab.soundAxis/audio_effects"
     private val effectsPlugin = AudioEffectsPlugin()
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

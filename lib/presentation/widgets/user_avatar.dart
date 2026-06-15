@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -8,19 +9,23 @@ import '../../core/theme/app_theme.dart';
 import '../../domain/models/app_user.dart';
 import 'ceramic_texture.dart';
 
-/// Circular avatar: network URL, local file path, or initials fallback.
+/// Circular avatar: network URL, local file path, raw bytes, or initials fallback.
 class UserAvatar extends StatelessWidget {
   const UserAvatar({
     super.key,
     required this.user,
     this.radius = 34,
     this.localPathOverride,
+    this.localBytesOverride,
     this.preferInitials = false,
   });
 
   final AppUser? user;
   final double radius;
   final String? localPathOverride;
+
+  /// Raw image bytes for an unsaved pick on web (where a file path is unavailable).
+  final Uint8List? localBytesOverride;
 
   /// When true, skip photo (e.g. user chose “remove” before save).
   final bool preferInitials;
@@ -30,6 +35,20 @@ class UserAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Bytes preview (web pick — no file path available).
+    if (!preferInitials && localBytesOverride != null) {
+      return _TexturedAvatarDisk(
+        radius: radius,
+        isDark: isDark,
+        child: CircleAvatar(
+          radius: _innerPhotoRadius,
+          backgroundColor: Colors.transparent,
+          backgroundImage: MemoryImage(localBytesOverride!),
+        ),
+      );
+    }
+
     final path = preferInitials ? null : (localPathOverride ?? user?.avatarUrl);
 
     if (path != null && path.isNotEmpty) {

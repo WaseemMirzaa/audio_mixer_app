@@ -13,7 +13,7 @@ import 'package:flutter/services.dart';
 /// On other platforms: all methods are no-ops.
 class AudioEffectsChannel {
   static const _ch =
-      MethodChannel('com.example.audio_mixer_app/audio_effects');
+      MethodChannel('com.codetivelab.soundAxis/audio_effects');
 
   static bool get _supported => Platform.isAndroid || Platform.isIOS;
 
