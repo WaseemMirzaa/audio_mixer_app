@@ -17,29 +17,46 @@ class ForgotPasswordScreen extends ConsumerStatefulWidget {
 
 class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   final _email = TextEditingController();
+  bool _loading = false;
+  bool _sent = false;
   String? _error;
 
+  static final _emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
   Future<void> _send() async {
-    setState(() => _error = null);
+    final email = _email.text.trim();
+    if (email.isEmpty) {
+      setState(() => _error = 'Email is required.');
+      return;
+    }
+    if (!_emailRegex.hasMatch(email)) {
+      setState(() => _error = 'Enter a valid email address.');
+      return;
+    }
+
+    setState(() {
+      _error = null;
+      _loading = true;
+    });
+
     try {
       await ref
           .read(authRepositoryProvider)
-          .sendPasswordResetEmail(_email.text.trim());
+          .sendPasswordResetEmail(email);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Reset link sent (mock uses toast only).'),
-        ),
-      );
-      context.go('/login');
+      setState(() => _sent = true);
     } on AuthException catch (e) {
       setState(
-        () => _error = e.code == 'invalid-email'
-            ? 'Invalid email'
-            : 'Could not send reset.',
+        () => _error = switch (e.code) {
+          'invalid-email' => 'Invalid email address.',
+          'user-not-found' => 'No account found with this email.',
+          _ => 'Could not send reset link. Please try again.',
+        },
       );
     } catch (_) {
-      setState(() => _error = 'Network failure.');
+      setState(() => _error = 'Network error. Please try again.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -77,46 +94,60 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: const BookWithNotes(height: 300),
+              child: const BookWithNotes(height: 200),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 8),
             const SaHeading(
               title: 'Forgot Password?',
-              subtitle: 'Enter your email and we’ll send you a reset link',
+              subtitle: 'Enter your email and we\'ll send you a reset link',
             ),
             const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: SaGlassTextField(
-                strongFill: true,
-                controller: _email,
-                label: 'Email',
-                hint: 'demo@app.com',
-                keyboardType: TextInputType.emailAddress,
-              ),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 8),
+            if (_sent)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                child: Text(
+                  'Reset link sent! Check your inbox.',
+                  style: TextStyle(
+                    color: glass.accent,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
+                ),
+              )
+            else ...[
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Text(
-                  _error!,
-                  style: const TextStyle(
-                    color: Color(0xFFFF7A9D),
-                    fontWeight: FontWeight.w700,
+                child: SaGlassTextField(
+                  strongFill: true,
+                  controller: _email,
+                  label: 'Email',
+                  hint: 'you@example.com',
+                  keyboardType: TextInputType.emailAddress,
+                ),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    _error!,
+                    style: const TextStyle(
+                      color: Color(0xFFFF7A9D),
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: SaPrimaryButton(
+                  dark: true,
+                  label: _loading ? 'Sending…' : 'Send Reset Link',
+                  onPressed: _loading ? null : _send,
                 ),
               ),
             ],
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: SaPrimaryButton(
-                dark: true,
-                label: 'Send Reset Link',
-                onPressed: _send,
-              ),
-            ),
             Center(
               child: TextButton(
                 onPressed: () => context.go('/login'),
