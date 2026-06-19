@@ -21,11 +21,8 @@ class HomeDashboardScreen extends ConsumerWidget {
 
 /// SoundAxis light-mode tokens — sampled from the reference design (teal glass).
 abstract final class _LightColors {
-  // Background ramp (radial teal → deep teal).
-  static const tealBright = Color(0xFF2A9DB0);
+  // Brand teal — used by the hero "plus" button icon.
   static const teal = Color(0xFF137E90);
-  static const tealDeep = Color(0xFF0A6171);
-  static const bgBottom = Color(0xFF023D4E);
 
   // Text
   static const textPrimary = Color(0xFFDCEAF2); // cool white headings
@@ -50,10 +47,6 @@ abstract final class _LightColors {
   // Play ring (recent session tiles)
   static const playRingBg = Color(0x730A7082); // rgba(10,112,130,.45)
   static const playRingBorder = Color(0x6683EAF1); // rgba(131,234,241,.4)
-
-  // Atmosphere glows (screen::before)
-  static const glowTopRight = Color(0x1A8CF0FA); // rgba(140,240,250,.10)
-  static const glowLeftMid = Color(0x590A5A69); // rgba(10,90,105,.35)
 
   // Category icon tiles — gradient + glyph (cycled by index).
   static const catGradients = [
@@ -110,7 +103,7 @@ class _LightHomeDashboard extends ConsumerWidget {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          const _LightHomeBackground(),
+          const SaPlayerBackground(),
           SafeArea(
             child: Column(
               children: [
@@ -184,53 +177,6 @@ class _LightHomeDashboard extends ConsumerWidget {
                   error: (_, __) => const SizedBox.shrink(),
                 ),
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Deep-teal radial backdrop with the two faint atmosphere glows from the design.
-class _LightHomeBackground extends StatelessWidget {
-  const _LightHomeBackground();
-
-  @override
-  Widget build(BuildContext context) {
-    return const DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: RadialGradient(
-          center: Alignment(0, -1.05),
-          radius: 1.35,
-          colors: [
-            _LightColors.tealBright,
-            _LightColors.teal,
-            _LightColors.tealDeep,
-            _LightColors.bgBottom,
-          ],
-          stops: [0.0, 0.30, 0.58, 1.0],
-        ),
-      ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: RadialGradient(
-                center: Alignment(0.78, -0.9),
-                radius: 0.5,
-                colors: [_LightColors.glowTopRight, Color(0x008CF0FA)],
-              ),
-            ),
-          ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: RadialGradient(
-                center: Alignment(-1.0, 0.2),
-                radius: 0.7,
-                colors: [_LightColors.glowLeftMid, Color(0x000A5A69)],
-              ),
             ),
           ),
         ],
@@ -368,7 +314,7 @@ class _DarkHomeDashboard extends ConsumerWidget {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          const SaGlassBackground(isDark: true),
+          const SaPlayerBackground(),
           SafeArea(
             child: Column(
               children: [

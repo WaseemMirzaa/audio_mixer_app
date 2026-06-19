@@ -153,7 +153,7 @@ class _MixerBackgroundUploadScreenState
       body: Stack(
         fit: StackFit.expand,
         children: [
-          SaGlassBackground(isDark: glass.isDark),
+          const SaPlayerBackground(),
           SafeArea(
             child: Column(
               children: [
