@@ -347,9 +347,6 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
   bool get _isDark => Theme.of(context).brightness == Brightness.dark;
   SaGlass get _glass => SaGlass.of(context);
 
-  /// Home-page background base colour (deep navy in dark, deep teal in light).
-  Color get _homeOverlayColor =>
-      _isDark ? const Color(0xFF010A1B) : const Color(0xFF023D4E);
   Color get _appBarFg => _glass.textPrimary;
   Color get _onCeramicMuted => _glass.textMuted;
 
@@ -1771,26 +1768,7 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
         body: Stack(
           fit: StackFit.expand,
           children: [
-            const SaSplashBackground(),
-            // Home-page-colored overlay: fully opaque at the bottom, fading to
-            // transparent by the vertical middle.
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    // Fade to transparent ~90% up the screen.
-                    end: const Alignment(0, -0.8),
-                    colors: [
-                      _homeOverlayColor,
-                      _homeOverlayColor.withValues(alpha: 0.7),
-                      _homeOverlayColor.withValues(alpha: 0),
-                    ],
-                    stops: const [0.0, 0.5, 1.0],
-                  ),
-                ),
-              ),
-            ),
+            const SaPlayerBackground(),
             body,
           ],
         ),

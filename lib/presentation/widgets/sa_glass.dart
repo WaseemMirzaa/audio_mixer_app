@@ -454,6 +454,49 @@ class SaSplashBackground extends StatelessWidget {
   }
 }
 
+/// The player-style page backdrop: the full-bleed splash photo with a
+/// brand-coloured fade rising from the bottom so foreground content stays
+/// readable. Light/dark variants are chosen automatically. Shared by the
+/// Player, Home and the audio picker so the core flow has one backdrop.
+class SaPlayerBackground extends StatelessWidget {
+  const SaPlayerBackground({super.key});
+
+  /// Bottom anchor tone — deep teal in light, near-black navy in dark. Matches
+  /// the Home gradient's bottom stop so the fade lands on the established tone.
+  static const _overlayLight = Color(0xFF023D4E);
+  static const _overlayDark = Color(0xFF010A1B);
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final overlay = isDark ? _overlayDark : _overlayLight;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        const SaSplashBackground(),
+        // Brand-coloured overlay: opaque at the bottom, fading to transparent
+        // by the vertical middle so the photo shows behind the top content.
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: const Alignment(0, -0.8),
+                colors: [
+                  overlay,
+                  overlay.withValues(alpha: 0.7),
+                  overlay.withValues(alpha: 0),
+                ],
+                stops: const [0.0, 0.5, 1.0],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// Scaffold pre-wired with a background — the glass radial by default, or the
 /// branded splash image when [splashBackground] is true (login / signup / etc).
 class SaGlassScaffold extends StatelessWidget {
