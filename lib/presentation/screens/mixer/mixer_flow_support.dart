@@ -6,7 +6,12 @@ import '../../../domain/models/mixer_state.dart';
 import '../../../domain/models/track_ref.dart';
 import '../../providers/providers.dart';
 
-Future<void> bootstrapMixerFlow(WidgetRef ref) async {
+Future<void> bootstrapMixerFlow(
+  WidgetRef ref, {
+  bool Function()? keepAlive,
+}) async {
+  bool alive() => keepAlive?.call() ?? true;
+
   final launch = ref.read(mixerLaunchArgsProvider);
   final sessionId = launch?.sessionId;
   final presetId = launch?.presetId;
@@ -21,6 +26,7 @@ Future<void> bootstrapMixerFlow(WidgetRef ref) async {
 
   if (sessionId != null) {
     final existing = await sessions.getSession(sessionId);
+    if (!alive()) return;
     if (existing != null) {
       final fgPath = existing.foregroundPath ?? '';
       final bgPath = existing.backgroundPath ?? '';
@@ -68,6 +74,7 @@ Future<void> bootstrapMixerFlow(WidgetRef ref) async {
 
   if (presetId != null) {
     final p = await presets.getPreset(presetId);
+    if (!alive()) return;
     if (p != null) {
       nextUi = nextUi.copyWith(
         fgVolume: p.foregroundVolume,
@@ -96,6 +103,7 @@ Future<void> bootstrapMixerFlow(WidgetRef ref) async {
     nextUi = nextUi.copyWith(durationMs: dur <= 0 ? 180000 : dur);
   }
 
+  if (!alive()) return;
   ref.read(mixerDraftProvider.notifier).state = nextDraft;
   ref.read(mixerUiProvider.notifier).state = nextUi;
   ref.read(mixerReadyProvider.notifier).state = true;

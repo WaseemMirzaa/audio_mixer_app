@@ -26,6 +26,7 @@ class MixerTransportScreen extends ConsumerStatefulWidget {
 }
 
 class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
+  bool _alive = true;
   bool _loading = true;
   bool _isSeeking = false;
   bool _bgIsSeeking = false;
@@ -49,29 +50,43 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
   // Cached so dispose() can call pause() without accessing ref after unmount.
   late final _handler = ref.read(mixerAudioHandlerProvider);
 
+  void _setUi(MixerUiState state) {
+    if (!_alive || !mounted) return;
+    ref.read(mixerUiProvider.notifier).state = state;
+  }
+
+  void _updateUi(MixerUiState Function(MixerUiState current) patch) {
+    if (!_alive || !mounted) return;
+    _setUi(patch(ref.read(mixerUiProvider)));
+  }
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // Android 13+ (API 33+) requires runtime notification permission before
-      // the media-playback notification (lock screen / shade) will appear.
-      // No-op on Android 12 and below, and skipped on iOS (media controls
-      // there come from the audio background mode, not a notification).
-      if (Platform.isAndroid) {
-        await Permission.notification.request();
-      }
-      await bootstrapMixerFlow(ref);
-      if (!mounted) return;
-      final draft = ref.read(mixerDraftProvider);
-      _titleCtrl.text = draft?.title ?? 'Untitled session';
-      _notesCtrl.text = draft?.notes ?? '';
-      // First-time creation (no saved session yet) opens in edit mode;
-      // opening/playing an existing session opens in the clean player view.
-      _editing = draft?.sessionId == null;
-      await _loadAudio();
-      if (!mounted) return;
-      setState(() => _loading = false);
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
+  }
+
+  Future<void> _bootstrap() async {
+    if (!_alive || !mounted) return;
+    // Android 13+ (API 33+) requires runtime notification permission before
+    // the media-playback notification (lock screen / shade) will appear.
+    // No-op on Android 12 and below, and skipped on iOS (media controls
+    // there come from the audio background mode, not a notification).
+    if (Platform.isAndroid) {
+      await Permission.notification.request();
+    }
+    if (!_alive || !mounted) return;
+    await bootstrapMixerFlow(ref, keepAlive: () => _alive && mounted);
+    if (!_alive || !mounted) return;
+    final draft = ref.read(mixerDraftProvider);
+    _titleCtrl.text = draft?.title ?? 'Untitled session';
+    _notesCtrl.text = draft?.notes ?? '';
+    // First-time creation (no saved session yet) opens in edit mode;
+    // opening/playing an existing session opens in the clean player view.
+    _editing = draft?.sessionId == null;
+    await _loadAudio();
+    if (!_alive || !mounted) return;
+    setState(() => _loading = false);
   }
 
   // ── Audio lifecycle ─────────────────────────────────────────────────────────
@@ -122,43 +137,42 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
     if (realBgDur != null && realBgDur.inMilliseconds > 0) {
       updatedUi = updatedUi.copyWith(bgDurationMs: realBgDur.inMilliseconds);
     }
-    ref.read(mixerUiProvider.notifier).state = updatedUi;
+    _setUi(updatedUi);
 
     _posSub?.cancel();
     _posSub = svc.positionStream.listen((pos) {
-      if (!mounted || _isSeeking) return;
+      if (!_alive || !mounted || _isSeeking) return;
       final cur = ref.read(mixerUiProvider);
       final ms = pos.inMilliseconds.clamp(0, cur.durationMs);
       if ((ms - cur.positionMs).abs() > 200) {
-        ref.read(mixerUiProvider.notifier).state = cur.copyWith(positionMs: ms);
+        _setUi(cur.copyWith(positionMs: ms));
       }
     });
 
     _bgPosSub?.cancel();
     _bgPosSub = svc.bgPositionStream.listen((pos) {
-      if (!mounted || _bgIsSeeking) return;
+      if (!_alive || !mounted || _bgIsSeeking) return;
       final cur = ref.read(mixerUiProvider);
       final bgDurMs = cur.bgDurationMs > 0 ? cur.bgDurationMs : 1;
       final ms = pos.inMilliseconds.clamp(0, bgDurMs);
       if ((ms - cur.bgPositionMs).abs() > 200) {
-        ref.read(mixerUiProvider.notifier).state =
-            cur.copyWith(bgPositionMs: ms);
+        _setUi(cur.copyWith(bgPositionMs: ms));
       }
     });
 
     _playingSub?.cancel();
     _playingSub = svc.playingStream.listen((playing) {
-      if (!mounted) return;
+      if (!_alive || !mounted) return;
       final cur = ref.read(mixerUiProvider);
       if (cur.isPlaying != playing) {
-        ref.read(mixerUiProvider.notifier).state =
-            cur.copyWith(isPlaying: playing);
+        _setUi(cur.copyWith(isPlaying: playing));
       }
     });
   }
 
   @override
   void dispose() {
+    _alive = false;
     _posSub?.cancel();
     _bgPosSub?.cancel();
     _playingSub?.cancel();
@@ -175,6 +189,7 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
   // ── Playback controls ───────────────────────────────────────────────────────
 
   void _playPause() {
+    if (!_alive || !mounted) return;
     final svc = _handler;
     final ui = ref.read(mixerUiProvider);
     if (ui.isPlaying) {
@@ -182,15 +197,13 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
     } else {
       svc.play();
     }
-    ref.read(mixerUiProvider.notifier).state =
-        ui.copyWith(isPlaying: !ui.isPlaying);
+    _setUi(ui.copyWith(isPlaying: !ui.isPlaying));
   }
 
   void _seekTo(int ms) {
     final ui = ref.read(mixerUiProvider);
     final clamped = ms.clamp(0, ui.durationMs);
-    ref.read(mixerUiProvider.notifier).state =
-        ui.copyWith(positionMs: clamped);
+    _setUi(ui.copyWith(positionMs: clamped));
     _handler.seek(Duration(milliseconds: clamped));
   }
 
@@ -198,14 +211,12 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
     final ui = ref.read(mixerUiProvider);
     final bgDurMs = ui.bgDurationMs > 0 ? ui.bgDurationMs : 1;
     final clamped = ms.clamp(0, bgDurMs);
-    ref.read(mixerUiProvider.notifier).state =
-        ui.copyWith(bgPositionMs: clamped);
+    _setUi(ui.copyWith(bgPositionMs: clamped));
     _handler.seekBg(Duration(milliseconds: clamped));
   }
 
   void _setSpeed(double speed) {
-    ref.read(mixerUiProvider.notifier).state =
-        ref.read(mixerUiProvider).copyWith(playbackSpeed: speed);
+    _updateUi((ui) => ui.copyWith(playbackSpeed: speed));
     _handler.setSpeed(speed);
   }
 
@@ -240,37 +251,33 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
   void _updateEq(int i, double v) {
     final ui = ref.read(mixerUiProvider);
     final list = List<double>.from(_eqBg ? ui.bgEq : ui.fgEq)..[i] = v;
-    ref.read(mixerUiProvider.notifier).state =
-        _eqBg ? ui.copyWith(bgEq: list) : ui.copyWith(fgEq: list);
+    _setUi(_eqBg ? ui.copyWith(bgEq: list) : ui.copyWith(fgEq: list));
     _eqBg ? _handler.applyBgEq(list) : _handler.applyFgEq(list);
   }
 
   void _resetEq() {
     final ui = ref.read(mixerUiProvider);
     final zero = List<double>.filled((_eqBg ? ui.bgEq : ui.fgEq).length, 0);
-    ref.read(mixerUiProvider.notifier).state =
-        _eqBg ? ui.copyWith(bgEq: zero) : ui.copyWith(fgEq: zero);
+    _setUi(_eqBg ? ui.copyWith(bgEq: zero) : ui.copyWith(fgEq: zero));
     _eqBg ? _handler.applyBgEq(zero) : _handler.applyFgEq(zero);
   }
 
   void _updateBassBoost(double v) {
     final ui = ref.read(mixerUiProvider);
-    ref.read(mixerUiProvider.notifier).state =
-        _eqBg ? ui.copyWith(bgBassBoost: v) : ui.copyWith(fgBassBoost: v);
+    _setUi(_eqBg ? ui.copyWith(bgBassBoost: v) : ui.copyWith(fgBassBoost: v));
     _eqBg ? _handler.applyBgBassBoost(v) : _handler.applyFgBassBoost(v);
   }
 
   void _updateVirtualizer(double v) {
     final ui = ref.read(mixerUiProvider);
-    ref.read(mixerUiProvider.notifier).state =
-        _eqBg ? ui.copyWith(bgVirtualizer: v) : ui.copyWith(fgVirtualizer: v);
+    _setUi(
+        _eqBg ? ui.copyWith(bgVirtualizer: v) : ui.copyWith(fgVirtualizer: v));
     _eqBg ? _handler.applyBgVirtualizer(v) : _handler.applyFgVirtualizer(v);
   }
 
   void _updateLoudness(double v) {
     final ui = ref.read(mixerUiProvider);
-    ref.read(mixerUiProvider.notifier).state =
-        _eqBg ? ui.copyWith(bgLoudness: v) : ui.copyWith(fgLoudness: v);
+    _setUi(_eqBg ? ui.copyWith(bgLoudness: v) : ui.copyWith(fgLoudness: v));
     _eqBg ? _handler.applyBgLoudness(v) : _handler.applyFgLoudness(v);
   }
 
@@ -858,9 +865,9 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
                     value: bgProgress,
                     onChangeStart: (_) => _bgIsSeeking = true,
                     onChanged: (v) {
-                      ref.read(mixerUiProvider.notifier).state = ref
-                          .read(mixerUiProvider)
-                          .copyWith(bgPositionMs: (v * bgDur).round());
+                      _updateUi((cur) => cur.copyWith(
+                            bgPositionMs: (v * bgDur).round(),
+                          ));
                     },
                     onChangeEnd: (v) {
                       _bgIsSeeking = false;
@@ -904,8 +911,7 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
         value: progress.clamp(0.0, 1.0),
         onChangeStart: (_) => _isSeeking = true,
         onChanged: (v) {
-          ref.read(mixerUiProvider.notifier).state =
-              ui.copyWith(positionMs: (v * ui.durationMs).round());
+          _setUi(ui.copyWith(positionMs: (v * ui.durationMs).round()));
         },
         onChangeEnd: (v) {
           _isSeeking = false;
@@ -957,8 +963,7 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
       _sleepTimer = Timer(Duration(minutes: next), () {
         _handler.pause();
         if (!mounted) return;
-        ref.read(mixerUiProvider.notifier).state =
-            ref.read(mixerUiProvider).copyWith(isPlaying: false);
+        _updateUi((ui) => ui.copyWith(isPlaying: false));
         setState(() => _sleepMinutes = null);
       });
     }
@@ -1188,13 +1193,11 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
             active: ui.isPlaying && !ui.fgMuted,
             durMs: ui.durationMs,
             onVolume: (v) {
-              ref.read(mixerUiProvider.notifier).state =
-                  ui.copyWith(fgVolume: v);
+              _setUi(ui.copyWith(fgVolume: v));
               _pushVolumes();
             },
             onMute: () {
-              ref.read(mixerUiProvider.notifier).state =
-                  ui.copyWith(fgMuted: !ui.fgMuted);
+              _setUi(ui.copyWith(fgMuted: !ui.fgMuted));
               _pushVolumes();
             },
           ),
@@ -1208,13 +1211,11 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
             active: ui.isPlaying && !ui.bgMuted,
             durMs: ui.bgDurationMs,
             onVolume: (v) {
-              ref.read(mixerUiProvider.notifier).state =
-                  ui.copyWith(bgVolume: v);
+              _setUi(ui.copyWith(bgVolume: v));
               _pushVolumes();
             },
             onMute: () {
-              ref.read(mixerUiProvider.notifier).state =
-                  ui.copyWith(bgMuted: !ui.bgMuted);
+              _setUi(ui.copyWith(bgMuted: !ui.bgMuted));
               _pushVolumes();
             },
           ),
@@ -1677,8 +1678,7 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
                     min: 0,
                     max: 1,
                     onChanged: (v) {
-                      ref.read(mixerUiProvider.notifier).state =
-                          ui.copyWith(masterGain: v);
+                      _setUi(ui.copyWith(masterGain: v));
                       _pushVolumes();
                     },
                   ),

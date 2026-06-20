@@ -47,20 +47,23 @@ class AudioEffectsChannel {
   // ── iOS-only: AVAudioEngine playback ─────────────────────────────────────
 
   /// iOS only. Loads [path] into the native AVAudioEngine for [trackId].
-  /// Must be called before [playTrack]. No-op on Android.
-  static Future<void> setTrackFile({
+  /// Returns false if the file could not be loaded.
+  static Future<bool> setTrackFile({
     required String trackId,
     required String path,
     bool looping = false,
   }) async {
-    if (!Platform.isIOS) return;
+    if (!Platform.isIOS) return false;
     try {
       await _ch.invokeMethod<void>('setTrackFile', {
         'trackId': trackId,
         'path': path,
         'looping': looping,
       });
-    } catch (_) {}
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// iOS only. Starts or resumes playback of [trackId] through AVAudioEngine.

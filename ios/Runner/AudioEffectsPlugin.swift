@@ -1,36 +1,28 @@
 import AVFoundation
 import Flutter
 
-// Per-track AVAudioEngine pipeline:
-//   PlayerNode → EQ (5-band + globalGain) → BassBoost (low-shelf) → TimePitch → Reverb → Mixer → Output
-//
-// Each effect owns a distinct node/property so they compose independently and
-// never overwrite one another — matching Android's separate AudioEffect objects
-// (Equalizer / BassBoost / Virtualizer / LoudnessEnhancer):
-//   • setEqBands    → eqNode.bands[i].gain   (user 5-band EQ)
-//   • setLoudness   → eqNode.globalGain      (overall perceptual gain, separate from bands)
-//   • setBassBoost  → bassNode.bands[0].gain (dedicated low-shelf filter)
-//   • setVirtualizer→ reverbNode.wetDryMix   (spatial widening approximation)
+// Shared AVAudioEngine — both tracks mix into one output (dual engines were silent on device).
+// Per track: PlayerNode → EQ → BassBoost → TimePitch → Reverb → TrackMixer → MainMixer → Output
 private class TrackEngine {
-    let engine = AVAudioEngine()
     let playerNode = AVAudioPlayerNode()
-    let eqNode: AVAudioUnitEQ                   // 5-band parametric (user EQ) + globalGain (loudness)
-    let bassNode: AVAudioUnitEQ                 // single low-shelf band (bass boost)
-    let timePitchNode = AVAudioUnitTimePitch()  // playback speed
-    let reverbNode = AVAudioUnitReverb()        // virtualizer approximation
+    let eqNode: AVAudioUnitEQ
+    let bassNode: AVAudioUnitEQ
+    let timePitchNode = AVAudioUnitTimePitch()
+    let reverbNode = AVAudioUnitReverb()
+    let trackMixer = AVAudioMixerNode()
+
+    weak var engine: AVAudioEngine?
+    var isAttached = false
 
     var audioFile: AVAudioFile?
     var filePath: String?
     var durationFrames: AVAudioFramePosition = 0
     var sampleRate: Double = 44100
     var seekOffsetFrames: AVAudioFramePosition = 0
-    var startHostTime: UInt64 = 0
     var isRunning = false
-
-    // Looping (background ambient): the whole clip is preloaded into a buffer and
-    // scheduled with the `.loops` option so it repeats seamlessly.
     var looping = false
     var loopBuffer: AVAudioPCMBuffer?
+    var playbackFormat: AVAudioFormat?
 
     init() {
         eqNode = AVAudioUnitEQ(numberOfBands: 5)
@@ -42,9 +34,8 @@ private class TrackEngine {
             band.gain = 0
             band.bypass = false
         }
-        eqNode.globalGain = 0 // loudness; independent of per-band gains
+        eqNode.globalGain = 0
 
-        // Dedicated low-shelf band for bass boost so it never collides with the EQ.
         bassNode = AVAudioUnitEQ(numberOfBands: 1)
         if let lowShelf = bassNode.bands.first {
             lowShelf.filterType = .lowShelf
@@ -55,19 +46,45 @@ private class TrackEngine {
 
         reverbNode.loadFactoryPreset(.mediumHall)
         reverbNode.wetDryMix = 0
+        trackMixer.outputVolume = 1.0
+    }
 
+    func attach(to engine: AVAudioEngine) {
+        guard !isAttached else { return }
+        self.engine = engine
         engine.attach(playerNode)
         engine.attach(eqNode)
         engine.attach(bassNode)
         engine.attach(timePitchNode)
         engine.attach(reverbNode)
+        engine.attach(trackMixer)
+        isAttached = true
+    }
 
-        let format = engine.mainMixerNode.outputFormat(forBus: 0)
+    func reconnectGraph(format: AVAudioFormat) {
+        guard let engine = engine else { return }
+        engine.disconnectNodeOutput(playerNode)
+        engine.disconnectNodeInput(eqNode)
+        engine.disconnectNodeOutput(eqNode)
+        engine.disconnectNodeInput(bassNode)
+        engine.disconnectNodeOutput(bassNode)
+        engine.disconnectNodeInput(timePitchNode)
+        engine.disconnectNodeOutput(timePitchNode)
+        engine.disconnectNodeInput(reverbNode)
+        engine.disconnectNodeOutput(reverbNode)
+        engine.disconnectNodeInput(trackMixer)
+
         engine.connect(playerNode, to: eqNode, format: format)
         engine.connect(eqNode, to: bassNode, format: format)
         engine.connect(bassNode, to: timePitchNode, format: format)
         engine.connect(timePitchNode, to: reverbNode, format: format)
-        engine.connect(reverbNode, to: engine.mainMixerNode, format: format)
+        engine.connect(reverbNode, to: trackMixer, format: format)
+        engine.connect(trackMixer, to: engine.mainMixerNode, format: nil)
+        playbackFormat = format
+    }
+
+    func setVolume(_ volume: Float) {
+        trackMixer.outputVolume = volume
     }
 
     func currentPositionMs() -> Int {
@@ -77,7 +94,6 @@ private class TrackEngine {
            let playerTime = playerNode.playerTime(forNodeTime: lastRenderTime),
            playerTime.sampleTime >= 0 {
             var frames = seekOffsetFrames + playerTime.sampleTime
-            // A looping track wraps within the clip; a one-shot clamps to the end.
             if looping, durationFrames > 0 {
                 frames %= durationFrames
             } else {
@@ -88,10 +104,28 @@ private class TrackEngine {
         return Int(Double(seekOffsetFrames) / sampleRate * 1000)
     }
 
-    func stop() {
+    func stopScheduling() {
         if playerNode.isPlaying { playerNode.stop() }
-        if engine.isRunning { engine.stop() }
         isRunning = false
+    }
+
+    func stopAndDetach() {
+        stopScheduling()
+        guard let engine = engine, isAttached else { return }
+        engine.disconnectNodeInput(trackMixer)
+        engine.disconnectNodeOutput(reverbNode)
+        engine.disconnectNodeOutput(timePitchNode)
+        engine.disconnectNodeOutput(bassNode)
+        engine.disconnectNodeOutput(eqNode)
+        engine.disconnectNodeOutput(playerNode)
+        engine.detach(playerNode)
+        engine.detach(eqNode)
+        engine.detach(bassNode)
+        engine.detach(timePitchNode)
+        engine.detach(reverbNode)
+        engine.detach(trackMixer)
+        isAttached = false
+        self.engine = nil
     }
 }
 
@@ -99,14 +133,68 @@ class AudioEffectsPlugin: NSObject, FlutterPlugin {
 
     static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(
-            name: "com.example.audio_mixer_app/audio_effects",
+            name: "com.codetivelab.soundAxis/audio_effects",
             binaryMessenger: registrar.messenger()
         )
         let instance = AudioEffectsPlugin()
         registrar.addMethodCallDelegate(instance, channel: channel)
     }
 
+    private let engine = AVAudioEngine()
     private var tracks: [String: TrackEngine] = [:]
+
+    /// Stereo graph format — avoids mono/stereo mismatch when scheduling PCM buffers.
+    private func playbackFormat(for file: AVAudioFile) -> AVAudioFormat {
+        let rate = file.processingFormat.sampleRate
+        return AVAudioFormat(standardFormatWithSampleRate: rate, channels: 2)
+            ?? file.processingFormat
+    }
+
+    private func makeLoopBuffer(from file: AVAudioFile, targetFormat: AVAudioFormat) throws -> AVAudioPCMBuffer {
+        let srcFormat = file.processingFormat
+        guard file.length > 0,
+              let srcBuffer = AVAudioPCMBuffer(
+                pcmFormat: srcFormat,
+                frameCapacity: AVAudioFrameCount(file.length)) else {
+            throw NSError(domain: "AudioEffects", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "Could not allocate source buffer",
+            ])
+        }
+        file.framePosition = 0
+        try file.read(into: srcBuffer)
+
+        if srcFormat.channelCount == targetFormat.channelCount,
+           srcFormat.sampleRate == targetFormat.sampleRate {
+            return srcBuffer
+        }
+
+        guard let converter = AVAudioConverter(from: srcFormat, to: targetFormat),
+              let dstBuffer = AVAudioPCMBuffer(
+                pcmFormat: targetFormat,
+                frameCapacity: AVAudioFrameCount(file.length)) else {
+            throw NSError(domain: "AudioEffects", code: 2, userInfo: [
+                NSLocalizedDescriptionKey: "Could not create audio converter",
+            ])
+        }
+
+        var consumed = false
+        var convError: NSError?
+        let status = converter.convert(to: dstBuffer, error: &convError) { _, outStatus in
+            if consumed {
+                outStatus.pointee = .noDataNow
+                return nil
+            }
+            consumed = true
+            outStatus.pointee = .haveData
+            return srcBuffer
+        }
+        if status == .error || convError != nil {
+            throw convError ?? NSError(domain: "AudioEffects", code: 3, userInfo: [
+                NSLocalizedDescriptionKey: "Audio conversion failed",
+            ])
+        }
+        return dstBuffer
+    }
 
     func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         let args = call.arguments as? [String: Any] ?? [:]
@@ -115,98 +203,94 @@ class AudioEffectsPlugin: NSObject, FlutterPlugin {
         switch call.method {
         case "openEffects":
             openEffects(trackId: trackId, result: result)
-
         case "setTrackFile":
             let path = args["path"] as? String ?? ""
-            setTrackFile(trackId: trackId, path: path, looping: args["looping"] as? Bool ?? false, result: result)
-
+            setTrackFile(
+                trackId: trackId,
+                path: path,
+                looping: args["looping"] as? Bool ?? false,
+                result: result
+            )
         case "playTrack":
             playTrack(trackId: trackId, result: result)
-
         case "pauseTrack":
             pauseTrack(trackId: trackId, result: result)
-
         case "seekTrack":
             let ms = args["positionMs"] as? Int ?? 0
             seekTrack(trackId: trackId, positionMs: ms, result: result)
-
         case "getPosition":
-            let ms = tracks[trackId]?.currentPositionMs() ?? 0
-            result(ms)
-
+            result(tracks[trackId]?.currentPositionMs() ?? 0)
         case "setVolume":
             let vol = args["volume"] as? Double ?? 1.0
-            tracks[trackId]?.engine.mainMixerNode.outputVolume = Float(vol)
+            tracks[trackId]?.setVolume(Float(vol))
             result(nil)
-
         case "setSpeed":
             let speed = args["speed"] as? Double ?? 1.0
             tracks[trackId]?.timePitchNode.rate = Float(speed)
             result(nil)
-
         case "setEqBands":
             setEqBands(trackId: trackId, levels: args["levels"] as? [Double] ?? [], result: result)
-
         case "setBassBoost":
             setBassBoost(trackId: trackId, strength: args["strength"] as? Double ?? 0, result: result)
-
         case "setVirtualizer":
             setVirtualizer(trackId: trackId, strength: args["strength"] as? Double ?? 0, result: result)
-
         case "setLoudness":
             setLoudness(trackId: trackId, gainDb: args["gainDb"] as? Double ?? 0, result: result)
-
         case "setEnabled":
             result(nil)
-
         case "closeEffects":
             closeEffects(trackId: trackId, result: result)
-
         default:
             result(FlutterMethodNotImplemented)
         }
     }
 
-    // ── Open ────────────────────────────────────────────────────────────────────
-
     private func openEffects(trackId: String, result: FlutterResult) {
         if tracks[trackId] == nil {
-            tracks[trackId] = TrackEngine()
+            let track = TrackEngine()
+            track.attach(to: engine)
+            tracks[trackId] = track
         }
         configureAudioSession()
-        result(5) // 5-band EQ
+        result(5)
     }
 
-    // ── File / playback ─────────────────────────────────────────────────────────
-
     private func setTrackFile(trackId: String, path: String, looping: Bool, result: FlutterResult) {
-        guard let track = tracks[trackId] else { result(nil); return }
-        track.stop()
+        guard let track = tracks[trackId] else {
+            result(FlutterError(code: "NO_TRACK", message: "Track not opened", details: nil))
+            return
+        }
+        track.stopScheduling()
+
         let url: URL
         if path.hasPrefix("http://") || path.hasPrefix("https://") {
-            guard let u = URL(string: path) else { result(nil); return }
+            guard let u = URL(string: path) else {
+                result(FlutterError(code: "BAD_URL", message: "Invalid URL", details: nil))
+                return
+            }
             url = u
         } else {
             url = URL(fileURLWithPath: path)
         }
+
         do {
             let file = try AVAudioFile(forReading: url)
+            let format = playbackFormat(for: file)
             track.audioFile = file
             track.filePath = path
             track.durationFrames = file.length
-            track.sampleRate = file.processingFormat.sampleRate
+            track.sampleRate = format.sampleRate
             track.seekOffsetFrames = 0
             track.looping = looping
             track.loopBuffer = nil
-            // Preload the whole clip into a PCM buffer so it can be scheduled
-            // with the `.loops` option for seamless, gapless repetition.
-            if looping, file.length > 0,
-               let buffer = AVAudioPCMBuffer(
-                    pcmFormat: file.processingFormat,
-                    frameCapacity: AVAudioFrameCount(file.length)) {
-                file.framePosition = 0
-                try file.read(into: buffer)
-                track.loopBuffer = buffer
+
+            let wasRunning = engine.isRunning
+            if wasRunning { engine.stop() }
+            track.reconnectGraph(format: format)
+            if wasRunning { try engine.start() }
+
+            if looping, file.length > 0 {
+                track.loopBuffer = try makeLoopBuffer(from: file, targetFormat: format)
             }
             result(nil)
         } catch {
@@ -216,17 +300,25 @@ class AudioEffectsPlugin: NSObject, FlutterPlugin {
 
     private func playTrack(trackId: String, result: FlutterResult) {
         guard let track = tracks[trackId], let file = track.audioFile else {
-            result(nil); return
+            result(FlutterError(code: "NO_FILE", message: "No audio loaded", details: nil))
+            return
         }
         do {
-            if !track.engine.isRunning {
-                try track.engine.start()
+            configureAudioSession()
+            if track.playerNode.isPlaying {
+                track.playerNode.stop()
             }
-            if track.looping, let buffer = track.loopBuffer {
-                // Looping clip: schedule the preloaded buffer to repeat forever.
+            if !engine.isRunning {
+                try engine.start()
+            }
+            if track.looping, let buffer = track.loopBuffer, let format = track.playbackFormat {
+                if buffer.format.channelCount != format.channelCount {
+                    throw NSError(domain: "AudioEffects", code: 4, userInfo: [
+                        NSLocalizedDescriptionKey: "Loop buffer format mismatch",
+                    ])
+                }
                 track.playerNode.scheduleBuffer(buffer, at: nil, options: .loops, completionHandler: nil)
             } else {
-                // One-shot: stream the file from the saved seek offset.
                 file.framePosition = track.seekOffsetFrames
                 track.playerNode.scheduleFile(file, at: nil, completionHandler: nil)
             }
@@ -241,15 +333,13 @@ class AudioEffectsPlugin: NSObject, FlutterPlugin {
     private func pauseTrack(trackId: String, result: FlutterResult) {
         guard let track = tracks[trackId] else { result(nil); return }
         if track.playerNode.isPlaying {
-            // Capture frame position before stopping.
             if let lastRenderTime = track.playerNode.lastRenderTime,
                let playerTime = track.playerNode.playerTime(forNodeTime: lastRenderTime),
                playerTime.sampleTime > 0 {
                 track.seekOffsetFrames += playerTime.sampleTime
-                // Clamp to file length.
                 track.seekOffsetFrames = min(track.seekOffsetFrames, track.durationFrames)
             }
-            track.playerNode.stop() // stop clears the scheduled file; pause is not reliable here
+            track.playerNode.stop()
         }
         track.isRunning = false
         result(nil)
@@ -270,8 +360,6 @@ class AudioEffectsPlugin: NSObject, FlutterPlugin {
         }
     }
 
-    // ── Effects ─────────────────────────────────────────────────────────────────
-
     private func setEqBands(trackId: String, levels: [Double], result: FlutterResult) {
         guard let track = tracks[trackId] else { result(nil); return }
         for (i, band) in track.eqNode.bands.enumerated() where i < levels.count {
@@ -282,7 +370,6 @@ class AudioEffectsPlugin: NSObject, FlutterPlugin {
 
     private func setBassBoost(trackId: String, strength: Double, result: FlutterResult) {
         guard let track = tracks[trackId] else { result(nil); return }
-        // Dedicated low-shelf band — independent of the user EQ. 0–1 maps to 0–12 dB.
         if let lowShelf = track.bassNode.bands.first {
             lowShelf.gain = (Float(strength) * 12.0).clamped(to: 0...12)
         }
@@ -291,39 +378,38 @@ class AudioEffectsPlugin: NSObject, FlutterPlugin {
 
     private func setVirtualizer(trackId: String, strength: Double, result: FlutterResult) {
         guard let track = tracks[trackId] else { result(nil); return }
-        track.reverbNode.wetDryMix = Float(strength).clamped(to: 0...1) * 40.0 // 0–40% reverb as 3D approximation
+        track.reverbNode.wetDryMix = Float(strength).clamped(to: 0...1) * 40.0
         result(nil)
     }
 
     private func setLoudness(trackId: String, gainDb: Double, result: FlutterResult) {
         guard let track = tracks[trackId] else { result(nil); return }
-        // Overall gain via the EQ node's globalGain — a single property that is
-        // independent of the per-band gains, so it never clobbers the user EQ.
         track.eqNode.globalGain = Float(gainDb).clamped(to: 0...12)
         result(nil)
     }
 
     private func closeEffects(trackId: String, result: FlutterResult) {
-        tracks[trackId]?.stop()
+        tracks[trackId]?.stopAndDetach()
         tracks.removeValue(forKey: trackId)
+        if tracks.isEmpty, engine.isRunning {
+            engine.stop()
+        }
         result(nil)
     }
 
-    // ── Audio session ────────────────────────────────────────────────────────────
-
     private func configureAudioSession() {
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
-        try? session.setActive(true)
+        try? session.setCategory(.playback, mode: .default, options: [])
+        try? session.setActive(true, options: [])
     }
 
     func releaseAll() {
-        for track in tracks.values { track.stop() }
+        for track in tracks.values { track.stopAndDetach() }
         tracks.removeAll()
+        if engine.isRunning { engine.stop() }
     }
 }
 
-// Clamp helper for Float
 private extension Float {
     func clamped(to range: ClosedRange<Float>) -> Float {
         Swift.min(Swift.max(self, range.lowerBound), range.upperBound)

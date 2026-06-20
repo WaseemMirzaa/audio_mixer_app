@@ -1,12 +1,12 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
-import 'package:purchases_flutter/purchases_flutter.dart';
+// import 'package:purchases_flutter/purchases_flutter.dart';
 import '../../firebase_options.dart';
 import '../config/backend.dart';
 
 bool _didBootstrap = false;
 
-/// Initializes Firebase Auth (+ RevenueCat) when using [AppBackend.firebase].
+/// Initializes Firebase Auth when using [AppBackend.firebase].
 /// Session/preset/audio data is not stored in Firebase.
 Future<void> bootstrapApp({
   required AppBackend backend,
@@ -31,13 +31,14 @@ Future<void> bootstrapApp({
 
     await Firebase.initializeApp(options: options);
 
-    await Purchases.setLogLevel(LogLevel.warn);
-    const apiKey = String.fromEnvironment(
-      'REVENUECAT_PUBLIC_SDK_KEY',
-      defaultValue: '',
-    );
-    if (apiKey.isNotEmpty) {
-      await Purchases.configure(PurchasesConfiguration(apiKey));
-    }
+    // RevenueCat disabled until REVENUECAT_PUBLIC_SDK_KEY is wired in CI/Xcode.
+    // await Purchases.setLogLevel(LogLevel.warn);
+    // const apiKey = String.fromEnvironment(
+    //   'REVENUECAT_PUBLIC_SDK_KEY',
+    //   defaultValue: '',
+    // );
+    // if (apiKey.isNotEmpty) {
+    //   await Purchases.configure(PurchasesConfiguration(apiKey));
+    // }
   }
 }

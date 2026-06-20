@@ -34,7 +34,7 @@ class _MixerBackgroundUploadScreenState
   @override
   void initState() {
     super.initState();
-    // Always start with empty selections — new session begins fresh.
+    // Reset mixer state after first frame — Riverpod forbids writes in initState.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref.read(mixerDraftProvider.notifier).state = null;
@@ -140,7 +140,8 @@ class _MixerBackgroundUploadScreenState
           bgVolume: _bgVolume,
         );
     ref.read(mixerReadyProvider.notifier).state = true;
-    context.push('/mixer');
+    if (!mounted) return;
+    context.go('/mixer');
   }
 
   @override

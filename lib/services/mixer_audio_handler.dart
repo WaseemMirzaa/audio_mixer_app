@@ -21,6 +21,7 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
   String? _loadedFgSource;
   String? _loadedBgSource;
   bool _disposed = false;
+  bool _iosNativeReady = false;
 
   double _fgVol = 0.85;
   double _bgVol = 0.45;
@@ -71,7 +72,7 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
       if (event.begin) {
         _fg.pause();
         _bg.pause();
-        if (Platform.isIOS) {
+        if (Platform.isIOS && _iosNativeReady) {
           AudioEffectsChannel.pauseTrack(trackId: 'fg');
           AudioEffectsChannel.pauseTrack(trackId: 'bg');
         }
@@ -79,7 +80,7 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
           event.type == AudioInterruptionType.duck) {
         _fg.play();
         _bg.play();
-        if (Platform.isIOS) {
+        if (Platform.isIOS && _iosNativeReady) {
           AudioEffectsChannel.playTrack(trackId: 'fg');
           AudioEffectsChannel.playTrack(trackId: 'bg');
         }
@@ -90,6 +91,7 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
       AudioEffectsChannel.closeEffects(trackId: 'fg'),
       AudioEffectsChannel.closeEffects(trackId: 'bg'),
     ]);
+    if (Platform.isIOS) _iosNativeReady = false;
 
     try {
       await Future.wait([
@@ -130,23 +132,39 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
         await AudioEffectsChannel.openEffects(trackId: 'bg', sessionId: bgSid);
       }
     } else if (Platform.isIOS) {
-      await Future.wait([
-        AudioEffectsChannel.openEffects(trackId: 'fg', sessionId: 0),
-        AudioEffectsChannel.openEffects(trackId: 'bg', sessionId: 0),
-      ]);
-      await Future.wait([
-        AudioEffectsChannel.setTrackFile(trackId: 'fg', path: fgSource),
-        AudioEffectsChannel.setTrackFile(
-            trackId: 'bg', path: bgSource, looping: true),
-      ]);
-      await Future.wait([_fg.setVolume(0), _bg.setVolume(0)]);
-      if (startPositionMs > 0) {
-        await Future.wait([
-          AudioEffectsChannel.seekTrack(
-              trackId: 'fg', positionMs: startPositionMs),
-          AudioEffectsChannel.seekTrack(
-              trackId: 'bg', positionMs: startPositionMs),
-        ]);
+      final fgBands = await AudioEffectsChannel.openEffects(
+        trackId: 'fg',
+        sessionId: 0,
+      );
+      final bgBands = await AudioEffectsChannel.openEffects(
+        trackId: 'bg',
+        sessionId: 0,
+      );
+      if (fgBands != null && bgBands != null) {
+        final fgOk = await AudioEffectsChannel.setTrackFile(
+          trackId: 'fg',
+          path: fgSource,
+        );
+        final bgOk = await AudioEffectsChannel.setTrackFile(
+          trackId: 'bg',
+          path: bgSource,
+          looping: true,
+        );
+        _iosNativeReady = fgOk && bgOk;
+        if (_iosNativeReady) {
+          // Native engine owns output — mute just_audio decoders.
+          await Future.wait([_fg.setVolume(0), _bg.setVolume(0)]);
+          if (startPositionMs > 0) {
+            await Future.wait([
+              AudioEffectsChannel.seekTrack(
+                  trackId: 'fg', positionMs: startPositionMs),
+              AudioEffectsChannel.seekTrack(
+                  trackId: 'bg', positionMs: startPositionMs),
+            ]);
+          }
+        }
+      } else {
+        _iosNativeReady = false;
       }
     }
   }
@@ -176,12 +194,12 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
     // play() — rewind to the start first so the play button always works.
     if (_fg.processingState == ProcessingState.completed) {
       await _fg.seek(Duration.zero);
-      if (Platform.isIOS) {
+      if (Platform.isIOS && _iosNativeReady) {
         await AudioEffectsChannel.seekTrack(trackId: 'fg', positionMs: 0);
       }
     }
     await Future.wait([_fg.play(), _bg.play()]);
-    if (Platform.isIOS) {
+    if (Platform.isIOS && _iosNativeReady) {
       await Future.wait([
         AudioEffectsChannel.playTrack(trackId: 'fg'),
         AudioEffectsChannel.playTrack(trackId: 'bg'),
@@ -192,7 +210,7 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> _pauseBoth() async {
     if (_disposed) return;
     await Future.wait([_fg.pause(), _bg.pause()]);
-    if (Platform.isIOS) {
+    if (Platform.isIOS && _iosNativeReady) {
       await Future.wait([
         AudioEffectsChannel.pauseTrack(trackId: 'fg'),
         AudioEffectsChannel.pauseTrack(trackId: 'bg'),
@@ -203,7 +221,7 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> _seekFg(Duration position) async {
     if (_disposed) return;
     await _fg.seek(position);
-    if (Platform.isIOS) {
+    if (Platform.isIOS && _iosNativeReady) {
       await AudioEffectsChannel.seekTrack(
           trackId: 'fg', positionMs: position.inMilliseconds);
     }
@@ -219,7 +237,7 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> seekBg(Duration position) async {
     if (_disposed) return;
     await _bg.seek(position);
-    if (Platform.isIOS) {
+    if (Platform.isIOS && _iosNativeReady) {
       await AudioEffectsChannel.seekTrack(
           trackId: 'bg', positionMs: position.inMilliseconds);
     }
@@ -231,7 +249,7 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
     if (_fgLoop) return;
     await Future.wait([_fg.pause(), _bg.pause()]);
     await Future.wait([_fg.seek(Duration.zero), _bg.seek(Duration.zero)]);
-    if (Platform.isIOS) {
+    if (Platform.isIOS && _iosNativeReady) {
       await Future.wait([
         AudioEffectsChannel.pauseTrack(trackId: 'fg'),
         AudioEffectsChannel.pauseTrack(trackId: 'bg'),
@@ -247,7 +265,7 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> setSpeed(double speed) async {
     if (_disposed) return;
     await Future.wait([_fg.setSpeed(speed), _bg.setSpeed(speed)]);
-    if (Platform.isIOS) {
+    if (Platform.isIOS && _iosNativeReady) {
       await Future.wait([
         AudioEffectsChannel.setSpeedIOS(trackId: 'fg', speed: speed),
         AudioEffectsChannel.setSpeedIOS(trackId: 'bg', speed: speed),
@@ -267,7 +285,7 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
     if (_disposed) return;
     _fgVol = (fgMuted ? 0.0 : fgVolume * masterGain).clamp(0.0, 1.0);
     _bgVol = (bgMuted ? 0.0 : bgVolume * masterGain).clamp(0.0, 1.0);
-    if (Platform.isIOS) {
+    if (Platform.isIOS && _iosNativeReady) {
       AudioEffectsChannel.setVolume(trackId: 'fg', volume: _fgVol);
       AudioEffectsChannel.setVolume(trackId: 'bg', volume: _bgVol);
     } else {
