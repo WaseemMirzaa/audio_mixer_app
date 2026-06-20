@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../domain/models/mixer_state.dart';
@@ -51,6 +53,13 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Android 13+ (API 33+) requires runtime notification permission before
+      // the media-playback notification (lock screen / shade) will appear.
+      // No-op on Android 12 and below, and skipped on iOS (media controls
+      // there come from the audio background mode, not a notification).
+      if (Platform.isAndroid) {
+        await Permission.notification.request();
+      }
       await bootstrapMixerFlow(ref);
       if (!mounted) return;
       final draft = ref.read(mixerDraftProvider);

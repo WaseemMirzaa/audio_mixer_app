@@ -57,5 +57,7 @@
 		</array>
 		<key>NSAppleMusicUsageDescription</key>
 		<string>Sound Axis needs access to your music library to select audio tracks.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>Sound Axis needs access to your photos so you can choose a profile picture.</string>
 	</dict>
 </plist>
