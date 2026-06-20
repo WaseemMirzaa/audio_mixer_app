@@ -136,7 +136,7 @@ Uint8List _encodeBackupZip(Map<String, dynamic> args) {
   archive.addFile(ArchiveFile('manifest.json', mb.length, mb));
 
   final out = ZipEncoder().encode(archive);
-  return Uint8List.fromList(out!);
+  return Uint8List.fromList(out);
 }
 
 /// zip bytes → { 'manifest': String?, 'files': Map<String, Uint8List> }.
@@ -145,7 +145,7 @@ Map<String, dynamic> _decodeBackupZip(Uint8List bytes) {
   String? manifestJson;
   final files = <String, Uint8List>{};
   for (final f in archive.files) {
-    if (!f.isFile) continue;
+    if (f.name.endsWith('/')) continue; // skip directory entries
     final base = p.basename(f.name);
     if (base == 'manifest.json') {
       manifestJson = utf8.decode(f.content as List<int>);
