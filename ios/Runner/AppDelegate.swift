@@ -21,7 +21,7 @@ import AVFoundation
 
     if let controller = window?.rootViewController as? FlutterViewController {
       let channel = FlutterMethodChannel(
-        name: "com.example.audio_mixer_app/audio_effects",
+        name: "com.codetivelab.soundAxis/audio_effects",
         binaryMessenger: controller.binaryMessenger
       )
       channel.setMethodCallHandler(effectsPlugin.handle(_:result:))

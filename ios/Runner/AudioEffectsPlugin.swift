@@ -99,7 +99,7 @@ class AudioEffectsPlugin: NSObject, FlutterPlugin {
 
     static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(
-            name: "com.example.audio_mixer_app/audio_effects",
+            name: "com.codetivelab.soundAxis/audio_effects",
             binaryMessenger: registrar.messenger()
         )
         let instance = AudioEffectsPlugin()
