@@ -137,10 +137,6 @@ class _LightHomeDashboard extends ConsumerWidget {
                           ],
                         ),
                       ),
-                      _OutlineBellButton(
-                        color: _textPrimary,
-                        onTap: () {},
-                      ),
                     ],
                   ),
                 ),
@@ -348,10 +344,6 @@ class _DarkHomeDashboard extends ConsumerWidget {
                           ],
                         ),
                       ),
-                      _OutlineBellButton(
-                        color: _glass.textPrimary,
-                        onTap: () {},
-                      ),
                     ],
                   ),
                 ),
@@ -513,24 +505,6 @@ class _RecentSessionsHeader extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _OutlineBellButton extends StatelessWidget {
-  const _OutlineBellButton({required this.color, required this.onTap});
-
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      onPressed: onTap,
-      icon: Icon(Icons.notifications_outlined, color: color, size: 24),
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-      visualDensity: VisualDensity.compact,
     );
   }
 }
