@@ -274,6 +274,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
               enabled: !_saving,
               onPressed: _saving ? null : _save,
             ),
+            const SaLegalFooter(),
           ],
         ),
       ),
