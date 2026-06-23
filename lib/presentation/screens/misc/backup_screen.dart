@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -38,6 +40,64 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
     if (mounted) setState(() => _lastBackupMs = ms);
   }
 
+  /// Saves the backup ZIP directly to the public Downloads folder (Android)
+  /// or the app Documents directory (iOS), then shows a snackbar confirmation.
+  Future<void> _saveLocally() async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final repo = ref.read(sessionRepositoryProvider);
+      final result = await BackupService().exportToFile(repo);
+
+      File savedFile = result.file;
+      String locationLabel;
+
+      if (Platform.isAndroid) {
+        final downloadsDir = await getDownloadsDirectory();
+        if (downloadsDir != null) {
+          final dest = File(p.join(downloadsDir.path, p.basename(result.file.path)));
+          savedFile = await result.file.copy(dest.path);
+          locationLabel = 'Downloads';
+        } else {
+          locationLabel = 'Documents/backups';
+        }
+      } else {
+        // iOS: file is already in Documents/backups, accessible via Files app.
+        locationLabel = 'Files app → On My iPhone → SoundAxis';
+      }
+
+      await ref
+          .read(prefsProvider)
+          .setInt(PrefsKeys.lastBackupMs, DateTime.now().millisecondsSinceEpoch);
+      if (mounted) _loadLastBackup();
+
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Saved to $locationLabel: ${p.basename(savedFile.path)}'
+            '${result.audioMissingCount > 0 ? ' (${result.audioMissingCount} audio file${result.audioMissingCount == 1 ? '' : 's'} missing)' : ''}',
+          ),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    } on BackupEmpty {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('No sessions to export yet.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('Save failed: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
+  /// Opens the system share sheet so the user can send/save via any app.
   Future<void> _export() async {
     if (_exporting) return;
     setState(() => _exporting = true);
@@ -46,14 +106,11 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
       final repo = ref.read(sessionRepositoryProvider);
       final result = await BackupService().exportToFile(repo);
 
-      // Persist last-backup timestamp.
       await ref
           .read(prefsProvider)
           .setInt(PrefsKeys.lastBackupMs, DateTime.now().millisecondsSinceEpoch);
       if (mounted) _loadLastBackup();
 
-      // Share the ZIP — on iOS this opens Files / AirDrop / Mail etc.
-      // On Android it opens the system share sheet.
       await Share.shareXFiles(
         [XFile(result.file.path, mimeType: 'application/zip')],
         subject: 'Sound Axis backup',
@@ -284,9 +341,19 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
                 ),
                 const SizedBox(height: 16),
                 SaPrimaryButton(
-                  label: _exporting ? 'Preparing backup…' : 'Export Backup',
+                  label: _exporting
+                      ? 'Saving…'
+                      : Platform.isAndroid
+                          ? 'Save to Downloads'
+                          : 'Save to Files',
                   enabled: !_exporting && !_importing && sessionCount > 0,
-                  onPressed: _exporting ? null : _export,
+                  onPressed: _exporting ? null : _saveLocally,
+                ),
+                const SizedBox(height: 10),
+                SaSecondaryButton(
+                  label: _exporting ? 'Preparing…' : 'Share / Export',
+                  icon: Icons.share_rounded,
+                  onPressed: (!_exporting && !_importing && sessionCount > 0) ? _export : null,
                 ),
                 if (sessionCount == 0) ...[
                   const SizedBox(height: 8),
@@ -379,28 +446,28 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
                 if (Platform.isIOS) ...[
                   _Tip(
                     glass: glass,
-                    text: 'Tap Export, then choose "Save to Files" to keep the backup on your device.',
+                    text: '"Save to Files" saves the ZIP directly — find it in Files → On My iPhone → SoundAxis.',
                   ),
                   _Tip(
                     glass: glass,
-                    text: 'To import, tap "Import Backup" and select the ZIP from Files or iCloud Drive.',
+                    text: '"Share / Export" lets you send via AirDrop, Mail, iCloud Drive, or any app.',
                   ),
                   _Tip(
                     glass: glass,
-                    text: 'You can also transfer via AirDrop, Mail, or any share-capable app.',
+                    text: 'To import, tap "Import Backup" and pick the ZIP from Files or iCloud Drive.',
                   ),
                 ] else ...[
                   _Tip(
                     glass: glass,
-                    text: 'Tap Export, then choose where to save or share the ZIP (Downloads, Drive, email …).',
+                    text: '"Save to Downloads" saves the ZIP directly to your phone\'s Downloads folder.',
                   ),
                   _Tip(
                     glass: glass,
-                    text: 'To import, tap "Import Backup" and navigate to your saved ZIP file.',
+                    text: '"Share / Export" opens the share sheet — useful for Google Drive, email, etc.',
                   ),
                   _Tip(
                     glass: glass,
-                    text: 'If prompted for storage permission, tap Allow to let the app read the file.',
+                    text: 'To import, tap "Import Backup" and pick the ZIP from Downloads or another folder.',
                   ),
                 ],
               ],
