@@ -30,7 +30,7 @@ class ProfileScreen extends ConsumerWidget {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          SaGlassBackground(isDark: glass.isDark),
+          const SaPlayerBackground(),
           SafeArea(
             child: Column(
               children: [

@@ -540,9 +540,7 @@ class SaGlassScaffold extends StatelessWidget {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          splashBackground
-              ? const SaSplashBackground()
-              : SaGlassBackground(isDark: glass.isDark),
+          const SaPlayerBackground(),
           safeArea ? SafeArea(child: content) : content,
         ],
       ),
