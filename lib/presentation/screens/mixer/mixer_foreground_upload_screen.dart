@@ -10,9 +10,7 @@ import 'package:uuid/uuid.dart';
 import '../../../domain/models/mixer_state.dart';
 import '../../../domain/models/track_ref.dart';
 import '../../providers/providers.dart';
-import '../../widgets/app_layout.dart';
-import '../../widgets/app_surface_card.dart';
-import '../../widgets/primary_button.dart';
+import '../../widgets/sa_glass.dart';
 
 class MixerForegroundUploadScreen extends ConsumerStatefulWidget {
   const MixerForegroundUploadScreen({super.key});
@@ -111,57 +109,92 @@ class _MixerForegroundUploadScreenState
 
   @override
   Widget build(BuildContext context) {
+    final glass = SaGlass.of(context);
     final bg = ref.watch(mixerDraftProvider)?.background;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Step 2 · Foreground Audio')),
-      body: AppContent(
-        child: ListView(
-          children: [
-            AppSurfaceCard(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Upload foreground track',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 8),
-                    Text('Background: ${bg?.displayName ?? 'Not selected'}'),
-                  ],
+
+    return SaGlassScaffold(
+      header: SaBackHeader(
+        title: 'Step 2 · Foreground Audio',
+        onBack: () => context.pop(),
+      ),
+      child: ListView(
+        clipBehavior: Clip.none,
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        children: [
+          Container(
+            decoration: glass.hero(radius: 20),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Upload foreground track',
+                  style: TextStyle(
+                    color: glass.textPrimary,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            AppSurfaceCard(
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(_track?.displayName ?? 'No foreground selected'),
-                subtitle: Text(
-                  _track != null
-                      ? '${(_track!.durationMs / 1000).round()} sec'
-                      : 'MP3/WAV/AAC/M4A',
+                const SizedBox(height: 6),
+                Text(
+                  'Background: ${bg?.displayName ?? 'Not selected'}',
+                  style: TextStyle(color: glass.textMuted, fontSize: 13),
                 ),
-              ),
+              ],
             ),
-            if (_error != null) ...[
-              const SizedBox(height: 8),
-              Text(_error!, style: const TextStyle(color: Colors.redAccent)),
-            ],
-            const SizedBox(height: 14),
-            PrimaryButton(
-              label: _track == null ? 'Select Foreground' : 'Change Foreground',
-              onPressed: _pick,
-              outlined: true,
+          ),
+          const SizedBox(height: 12),
+          Container(
+            decoration: glass.card(radius: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Icon(Icons.audio_file_rounded, color: glass.accent, size: 24),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _track?.displayName ?? 'No foreground selected',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: glass.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        _track != null
+                            ? '${(_track!.durationMs / 1000).round()} sec'
+                            : 'MP3 / WAV / AAC / M4A',
+                        style: TextStyle(color: glass.textMuted, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
+          ),
+          if (_error != null) ...[
             const SizedBox(height: 10),
-            PrimaryButton(
-              label: 'Continue to Mixer Editor',
-              onPressed: _continue,
+            Text(
+              _error!,
+              style: const TextStyle(color: Color(0xFFFF6B6B), fontSize: 13),
             ),
           ],
-        ),
+          const SizedBox(height: 16),
+          SaSecondaryButton(
+            label: _track == null ? 'Select Foreground' : 'Change Foreground',
+            onPressed: _pick,
+          ),
+          const SizedBox(height: 10),
+          SaPrimaryButton(
+            label: 'Continue to Mixer Editor',
+            onPressed: _continue,
+          ),
+        ],
       ),
     );
   }
