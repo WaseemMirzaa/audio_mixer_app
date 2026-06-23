@@ -117,7 +117,7 @@ class FirebaseSessionRepository implements SessionRepository {
         .where((d) => (d.data()['isDeleted'] as bool?) != true)
         .map((d) => _fromDoc(d.id, d.data()))
         .toList();
-    list.sort((a, b) => b.updatedAtMs.compareTo(a.updatedAtMs));
+    list.sort((a, b) => b.createdAtMs.compareTo(a.createdAtMs));
     return list;
   }
 

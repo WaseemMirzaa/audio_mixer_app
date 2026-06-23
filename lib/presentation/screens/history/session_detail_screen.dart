@@ -312,6 +312,7 @@ class _SessionDetailBody extends ConsumerWidget {
               title: '${s.title} copy',
               createdAtMs: DateTime.now().millisecondsSinceEpoch,
               updatedAtMs: DateTime.now().millisecondsSinceEpoch,
+              isFavorite: false,
             );
             await repo.upsertSession(copy);
             ref.invalidate(sessionsProvider);
