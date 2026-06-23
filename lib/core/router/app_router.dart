@@ -11,6 +11,7 @@ import '../../presentation/screens/history/history_screen.dart';
 import '../../presentation/screens/history/session_detail_screen.dart';
 import '../../presentation/screens/home/home_dashboard_screen.dart';
 import '../../presentation/screens/misc/about_app_screen.dart';
+import '../../presentation/screens/misc/backup_screen.dart';
 import '../../presentation/screens/misc/delete_account_screen.dart';
 import '../../presentation/screens/misc/error_screen.dart';
 import '../../presentation/screens/misc/permission_screen.dart';
@@ -120,6 +121,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/terms',
         builder: (context, state) => const TermsOfServiceScreen(),
+      ),
+      GoRoute(
+        path: '/backup',
+        builder: (context, state) => const BackupScreen(),
       ),
       GoRoute(
         path: '/delete-account',

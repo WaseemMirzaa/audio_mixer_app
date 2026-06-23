@@ -1,14 +1,9 @@
-import 'dart:io';
-
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../../domain/models/app_user.dart';
-import '../../../services/backup_service.dart';
 import '../../providers/providers.dart';
 import '../../widgets/sa_glass.dart';
 import '../../widgets/user_avatar.dart';
@@ -57,8 +52,8 @@ class ProfileScreen extends ConsumerWidget {
                   onAbout: () => context.push('/about'),
                   onPrivacy: () => context.push('/privacy'),
                   onTerms: () => context.push('/terms'),
-                  onExportBackup: () => _exportBackup(context, ref),
-                  onImportBackup: () => _importBackup(context, ref),
+                  onExportBackup: () => context.push('/backup'),
+                  onImportBackup: () => context.push('/backup'),
                   onReplayOnboarding: () =>
                       context.push('/onboarding?replay=1'),
                   onThemeChanged: (dark) {
@@ -88,79 +83,6 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _exportBackup(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final repo = ref.read(sessionRepositoryProvider);
-    final nav = Navigator.of(context, rootNavigator: true);
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const _BusyDialog('Preparing backup…'),
-    );
-    File file;
-    try {
-      file = await BackupService().exportToFile(repo);
-    } on BackupEmpty {
-      nav.pop();
-      messenger.showSnackBar(
-        const SnackBar(content: Text('No saved sessions to export yet.')),
-      );
-      return;
-    } catch (e) {
-      nav.pop();
-      messenger.showSnackBar(SnackBar(content: Text('Export failed: $e')));
-      return;
-    }
-    nav.pop();
-    await Share.shareXFiles(
-      [XFile(file.path, mimeType: 'application/zip')],
-      subject: 'SoundAxis backup',
-      text: 'SoundAxis sessions backup',
-    );
-  }
-
-  Future<void> _importBackup(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final repo = ref.read(sessionRepositoryProvider);
-    final uid = ref.read(authStateProvider).valueOrNull?.uid;
-
-    final picked = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['zip'],
-    );
-    if (picked == null || picked.files.isEmpty) return;
-    final path = picked.files.single.path;
-    if (path == null) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Could not read the selected file.')),
-      );
-      return;
-    }
-    if (!context.mounted) return;
-
-    final nav = Navigator.of(context, rootNavigator: true);
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const _BusyDialog('Importing backup…'),
-    );
-    try {
-      final n = await BackupService().importFromFile(File(path), repo, uid: uid);
-      ref.invalidate(sessionsProvider);
-      nav.pop();
-      messenger.showSnackBar(
-        SnackBar(content: Text('Imported $n session${n == 1 ? '' : 's'}.')),
-      );
-    } on BackupInvalid catch (e) {
-      nav.pop();
-      messenger.showSnackBar(
-        SnackBar(content: Text('Import failed: ${e.message}')),
-      );
-    } catch (e) {
-      nav.pop();
-      messenger.showSnackBar(SnackBar(content: Text('Import failed: $e')));
-    }
-  }
 }
 
 class _ProfileHeader extends StatelessWidget {
@@ -479,30 +401,3 @@ class _ThemeToggleTile extends StatelessWidget {
   }
 }
 
-/// Small modal shown while a backup is being created or restored.
-class _BusyDialog extends StatelessWidget {
-  const _BusyDialog(this.message);
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(strokeWidth: 2.6),
-            ),
-            const SizedBox(width: 18),
-            Flexible(child: Text(message)),
-          ],
-        ),
-      ),
-    );
-  }
-}
