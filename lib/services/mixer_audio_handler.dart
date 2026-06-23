@@ -87,11 +87,18 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
       }
     });
 
-    await Future.wait([
-      AudioEffectsChannel.closeEffects(trackId: 'fg'),
-      AudioEffectsChannel.closeEffects(trackId: 'bg'),
-    ]);
-    if (Platform.isIOS) _iosNativeReady = false;
+    if (Platform.isAndroid) {
+      await Future.wait([
+        AudioEffectsChannel.closeEffects(trackId: 'fg'),
+        AudioEffectsChannel.closeEffects(trackId: 'bg'),
+      ]);
+    } else if (Platform.isIOS) {
+      await Future.wait([
+        AudioEffectsChannel.closeEffects(trackId: 'fg'),
+        AudioEffectsChannel.closeEffects(trackId: 'bg'),
+      ]);
+      _iosNativeReady = false;
+    }
 
     try {
       await Future.wait([
@@ -152,7 +159,8 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
         );
         _iosNativeReady = fgOk && bgOk;
         if (_iosNativeReady) {
-          // Native engine owns output — mute just_audio decoders.
+          // Native AVAudioEngine owns audible output; just_audio stays muted
+          // for position / duration / UI sync only.
           await Future.wait([_fg.setVolume(0), _bg.setVolume(0)]);
           if (startPositionMs > 0) {
             await Future.wait([
@@ -162,11 +170,19 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
                   trackId: 'bg', positionMs: startPositionMs),
             ]);
           }
+        } else {
+          await Future.wait([_fg.setVolume(_fgVol), _bg.setVolume(_bgVol)]);
         }
       } else {
-        _iosNativeReady = false;
+        await Future.wait([_fg.setVolume(_fgVol), _bg.setVolume(_bgVol)]);
       }
     }
+  }
+
+  /// Fall back to just_audio output when native engine fails on iOS.
+  Future<void> _iosFallbackToJustAudio() async {
+    _iosNativeReady = false;
+    await Future.wait([_fg.setVolume(_fgVol), _bg.setVolume(_bgVol)]);
   }
 
   // ── BaseAudioHandler overrides (media session controls) ────────────────────
@@ -190,6 +206,8 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
 
   Future<void> _playBoth() async {
     if (_disposed) return;
+    final session = await AudioSession.instance;
+    await session.setActive(true);
     // just_audio leaves a completed track at its end and won't restart on
     // play() — rewind to the start first so the play button always works.
     if (_fg.processingState == ProcessingState.completed) {
@@ -198,12 +216,15 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
         await AudioEffectsChannel.seekTrack(trackId: 'fg', positionMs: 0);
       }
     }
-    await Future.wait([_fg.play(), _bg.play()]);
     if (Platform.isIOS && _iosNativeReady) {
-      await Future.wait([
-        AudioEffectsChannel.playTrack(trackId: 'fg'),
-        AudioEffectsChannel.playTrack(trackId: 'bg'),
-      ]);
+      final fgOk = await AudioEffectsChannel.playTrack(trackId: 'fg');
+      final bgOk = await AudioEffectsChannel.playTrack(trackId: 'bg');
+      if (!fgOk || !bgOk) {
+        await _iosFallbackToJustAudio();
+      }
+      await Future.wait([_fg.play(), _bg.play()]);
+    } else {
+      await Future.wait([_fg.play(), _bg.play()]);
     }
   }
 
@@ -296,29 +317,45 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
 
   // ── Effects ────────────────────────────────────────────────────────────────
 
-  Future<void> applyFgEq(List<double> levels) =>
-      AudioEffectsChannel.setEqBands(trackId: 'fg', levels: levels);
+  Future<void> applyFgEq(List<double> levels) async {
+    if (Platform.isIOS && !_iosNativeReady) return;
+    await AudioEffectsChannel.setEqBands(trackId: 'fg', levels: levels);
+  }
 
-  Future<void> applyBgEq(List<double> levels) =>
-      AudioEffectsChannel.setEqBands(trackId: 'bg', levels: levels);
+  Future<void> applyBgEq(List<double> levels) async {
+    if (Platform.isIOS && !_iosNativeReady) return;
+    await AudioEffectsChannel.setEqBands(trackId: 'bg', levels: levels);
+  }
 
-  Future<void> applyFgBassBoost(double strength) =>
-      AudioEffectsChannel.setBassBoost(trackId: 'fg', strength: strength);
+  Future<void> applyFgBassBoost(double strength) async {
+    if (Platform.isIOS && !_iosNativeReady) return;
+    await AudioEffectsChannel.setBassBoost(trackId: 'fg', strength: strength);
+  }
 
-  Future<void> applyBgBassBoost(double strength) =>
-      AudioEffectsChannel.setBassBoost(trackId: 'bg', strength: strength);
+  Future<void> applyBgBassBoost(double strength) async {
+    if (Platform.isIOS && !_iosNativeReady) return;
+    await AudioEffectsChannel.setBassBoost(trackId: 'bg', strength: strength);
+  }
 
-  Future<void> applyFgVirtualizer(double strength) =>
-      AudioEffectsChannel.setVirtualizer(trackId: 'fg', strength: strength);
+  Future<void> applyFgVirtualizer(double strength) async {
+    if (Platform.isIOS && !_iosNativeReady) return;
+    await AudioEffectsChannel.setVirtualizer(trackId: 'fg', strength: strength);
+  }
 
-  Future<void> applyBgVirtualizer(double strength) =>
-      AudioEffectsChannel.setVirtualizer(trackId: 'bg', strength: strength);
+  Future<void> applyBgVirtualizer(double strength) async {
+    if (Platform.isIOS && !_iosNativeReady) return;
+    await AudioEffectsChannel.setVirtualizer(trackId: 'bg', strength: strength);
+  }
 
-  Future<void> applyFgLoudness(double gainDb) =>
-      AudioEffectsChannel.setLoudness(trackId: 'fg', gainDb: gainDb);
+  Future<void> applyFgLoudness(double gainDb) async {
+    if (Platform.isIOS && !_iosNativeReady) return;
+    await AudioEffectsChannel.setLoudness(trackId: 'fg', gainDb: gainDb);
+  }
 
-  Future<void> applyBgLoudness(double gainDb) =>
-      AudioEffectsChannel.setLoudness(trackId: 'bg', gainDb: gainDb);
+  Future<void> applyBgLoudness(double gainDb) async {
+    if (Platform.isIOS && !_iosNativeReady) return;
+    await AudioEffectsChannel.setLoudness(trackId: 'bg', gainDb: gainDb);
+  }
 
   Future<void> applyAllEffects({
     required List<double> fgEq,

@@ -143,57 +143,27 @@ class AudioEffectsPlugin: NSObject, FlutterPlugin {
     private let engine = AVAudioEngine()
     private var tracks: [String: TrackEngine] = [:]
 
-    /// Stereo graph format — avoids mono/stereo mismatch when scheduling PCM buffers.
-    private func playbackFormat(for file: AVAudioFile) -> AVAudioFormat {
-        let rate = file.processingFormat.sampleRate
-        return AVAudioFormat(standardFormatWithSampleRate: rate, channels: 2)
-            ?? file.processingFormat
-    }
-
-    private func makeLoopBuffer(from file: AVAudioFile, targetFormat: AVAudioFormat) throws -> AVAudioPCMBuffer {
-        let srcFormat = file.processingFormat
+    private func makeLoopBuffer(from file: AVAudioFile) throws -> AVAudioPCMBuffer {
+        let format = file.processingFormat
         guard file.length > 0,
-              let srcBuffer = AVAudioPCMBuffer(
-                pcmFormat: srcFormat,
+              let buffer = AVAudioPCMBuffer(
+                pcmFormat: format,
                 frameCapacity: AVAudioFrameCount(file.length)) else {
             throw NSError(domain: "AudioEffects", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "Could not allocate source buffer",
+                NSLocalizedDescriptionKey: "Could not allocate loop buffer",
             ])
         }
         file.framePosition = 0
-        try file.read(into: srcBuffer)
+        try file.read(into: buffer)
+        return buffer
+    }
 
-        if srcFormat.channelCount == targetFormat.channelCount,
-           srcFormat.sampleRate == targetFormat.sampleRate {
-            return srcBuffer
+    private func prepareEngineIfNeeded() throws {
+        engine.mainMixerNode.outputVolume = 1.0
+        if !engine.isRunning {
+            engine.prepare()
+            try engine.start()
         }
-
-        guard let converter = AVAudioConverter(from: srcFormat, to: targetFormat),
-              let dstBuffer = AVAudioPCMBuffer(
-                pcmFormat: targetFormat,
-                frameCapacity: AVAudioFrameCount(file.length)) else {
-            throw NSError(domain: "AudioEffects", code: 2, userInfo: [
-                NSLocalizedDescriptionKey: "Could not create audio converter",
-            ])
-        }
-
-        var consumed = false
-        var convError: NSError?
-        let status = converter.convert(to: dstBuffer, error: &convError) { _, outStatus in
-            if consumed {
-                outStatus.pointee = .noDataNow
-                return nil
-            }
-            consumed = true
-            outStatus.pointee = .haveData
-            return srcBuffer
-        }
-        if status == .error || convError != nil {
-            throw convError ?? NSError(domain: "AudioEffects", code: 3, userInfo: [
-                NSLocalizedDescriptionKey: "Audio conversion failed",
-            ])
-        }
-        return dstBuffer
     }
 
     func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -275,7 +245,7 @@ class AudioEffectsPlugin: NSObject, FlutterPlugin {
 
         do {
             let file = try AVAudioFile(forReading: url)
-            let format = playbackFormat(for: file)
+            let format = file.processingFormat
             track.audioFile = file
             track.filePath = path
             track.durationFrames = file.length
@@ -287,10 +257,11 @@ class AudioEffectsPlugin: NSObject, FlutterPlugin {
             let wasRunning = engine.isRunning
             if wasRunning { engine.stop() }
             track.reconnectGraph(format: format)
-            if wasRunning { try engine.start() }
-
             if looping, file.length > 0 {
-                track.loopBuffer = try makeLoopBuffer(from: file, targetFormat: format)
+                track.loopBuffer = try makeLoopBuffer(from: file)
+            }
+            if wasRunning {
+                try prepareEngineIfNeeded()
             }
             result(nil)
         } catch {
@@ -308,15 +279,8 @@ class AudioEffectsPlugin: NSObject, FlutterPlugin {
             if track.playerNode.isPlaying {
                 track.playerNode.stop()
             }
-            if !engine.isRunning {
-                try engine.start()
-            }
-            if track.looping, let buffer = track.loopBuffer, let format = track.playbackFormat {
-                if buffer.format.channelCount != format.channelCount {
-                    throw NSError(domain: "AudioEffects", code: 4, userInfo: [
-                        NSLocalizedDescriptionKey: "Loop buffer format mismatch",
-                    ])
-                }
+            try prepareEngineIfNeeded()
+            if track.looping, let buffer = track.loopBuffer {
                 track.playerNode.scheduleBuffer(buffer, at: nil, options: .loops, completionHandler: nil)
             } else {
                 file.framePosition = track.seekOffsetFrames
@@ -401,6 +365,7 @@ class AudioEffectsPlugin: NSObject, FlutterPlugin {
         let session = AVAudioSession.sharedInstance()
         try? session.setCategory(.playback, mode: .default, options: [])
         try? session.setActive(true, options: [])
+        engine.mainMixerNode.outputVolume = 1.0
     }
 
     func releaseAll() {

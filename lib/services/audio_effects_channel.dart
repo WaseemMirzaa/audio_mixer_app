@@ -67,11 +67,14 @@ class AudioEffectsChannel {
   }
 
   /// iOS only. Starts or resumes playback of [trackId] through AVAudioEngine.
-  static Future<void> playTrack({required String trackId}) async {
-    if (!Platform.isIOS) return;
+  static Future<bool> playTrack({required String trackId}) async {
+    if (!Platform.isIOS) return false;
     try {
       await _ch.invokeMethod<void>('playTrack', {'trackId': trackId});
-    } catch (_) {}
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// iOS only. Pauses [trackId] and saves playhead position.
