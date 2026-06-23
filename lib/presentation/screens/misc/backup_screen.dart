@@ -40,8 +40,6 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
     if (mounted) setState(() => _lastBackupMs = ms);
   }
 
-  /// Saves the backup ZIP directly to the public Downloads folder (Android)
-  /// or the app Documents directory (iOS), then shows a snackbar confirmation.
   Future<void> _saveLocally() async {
     if (_exporting) return;
     setState(() => _exporting = true);
@@ -63,7 +61,6 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
           locationLabel = 'Documents/backups';
         }
       } else {
-        // iOS: file is already in Documents/backups, accessible via Files app.
         locationLabel = 'Files app → On My iPhone → SoundAxis';
       }
 
@@ -97,7 +94,6 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
     }
   }
 
-  /// Opens the system share sheet so the user can send/save via any app.
   Future<void> _export() async {
     if (_exporting) return;
     setState(() => _exporting = true);
