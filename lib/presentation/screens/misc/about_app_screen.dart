@@ -63,7 +63,70 @@ class AboutAppScreen extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(height: 12),
+          Container(
+            decoration: glass.card(radius: 18),
+            child: Column(
+              children: [
+                _LinkTile(
+                  glass: glass,
+                  icon: Icons.privacy_tip_outlined,
+                  label: 'Privacy Policy',
+                  onTap: () => context.push('/privacy'),
+                ),
+                Divider(height: 1, indent: 16, endIndent: 16, color: glass.divider),
+                _LinkTile(
+                  glass: glass,
+                  icon: Icons.gavel_rounded,
+                  label: 'Terms of Service',
+                  onTap: () => context.push('/terms'),
+                ),
+              ],
+            ),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _LinkTile extends StatelessWidget {
+  const _LinkTile({
+    required this.glass,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final SaGlass glass;
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+        child: Row(
+          children: [
+            Icon(icon, color: glass.accent, size: 22),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: glass.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: glass.textMuted, size: 22),
+          ],
+        ),
       ),
     );
   }

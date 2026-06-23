@@ -14,7 +14,9 @@ import '../../presentation/screens/misc/about_app_screen.dart';
 import '../../presentation/screens/misc/delete_account_screen.dart';
 import '../../presentation/screens/misc/error_screen.dart';
 import '../../presentation/screens/misc/permission_screen.dart';
+import '../../presentation/screens/misc/privacy_policy_screen.dart';
 import '../../presentation/screens/misc/subscription_expired_screen.dart';
+import '../../presentation/screens/misc/terms_of_service_screen.dart';
 import '../../presentation/screens/mixer/mixer_background_upload_screen.dart';
 import '../../presentation/screens/mixer/mixer_transport_screen.dart';
 import '../../presentation/screens/onboarding/get_started_screen.dart';
@@ -110,6 +112,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/about',
         builder: (context, state) => const AboutAppScreen(),
+      ),
+      GoRoute(
+        path: '/privacy',
+        builder: (context, state) => const PrivacyPolicyScreen(),
+      ),
+      GoRoute(
+        path: '/terms',
+        builder: (context, state) => const TermsOfServiceScreen(),
       ),
       GoRoute(
         path: '/delete-account',
