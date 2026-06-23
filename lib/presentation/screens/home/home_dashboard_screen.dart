@@ -165,13 +165,7 @@ class _LightHomeDashboard extends ConsumerWidget {
                     ],
                   ),
                 ),
-                sessions.when(
-                  data: (list) => list.isEmpty
-                      ? const SizedBox.shrink()
-                      : _HomeMiniPlayer(session: list.first, isDark: false),
-                  loading: () => const SizedBox.shrink(),
-                  error: (_, __) => const SizedBox.shrink(),
-                ),
+                _MiniPlayerSlot(isDark: false),
               ],
             ),
           ),
@@ -231,8 +225,6 @@ class _LightSessionCard extends StatelessWidget {
                 children: [
                   Text(
                     session.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: _LightColors.textPrimary,
                       fontSize: 16,
@@ -371,13 +363,7 @@ class _DarkHomeDashboard extends ConsumerWidget {
                     ],
                   ),
                 ),
-                sessions.when(
-                  data: (list) => list.isEmpty
-                      ? const SizedBox.shrink()
-                      : _HomeMiniPlayer(session: list.first, isDark: true),
-                  loading: () => const SizedBox.shrink(),
-                  error: (_, __) => const SizedBox.shrink(),
-                ),
+                _MiniPlayerSlot(isDark: true),
               ],
             ),
           ),
@@ -420,8 +406,6 @@ class _GlassSessionCard extends StatelessWidget {
                 children: [
                   Text(
                     session.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: glass.textPrimary,
                       fontSize: 16,
@@ -667,6 +651,34 @@ class _FloatingNote extends StatelessWidget {
   }
 }
 
+/// Shows the mini player only when audio is actively playing.
+/// Looks up the current session from [mixerLaunchArgsProvider].
+class _MiniPlayerSlot extends ConsumerWidget {
+  const _MiniPlayerSlot({required this.isDark});
+
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isPlaying = ref.watch(isPlayingProvider).valueOrNull ?? false;
+    if (!isPlaying) return const SizedBox.shrink();
+
+    final launchArgs = ref.watch(mixerLaunchArgsProvider);
+    final sessionId = launchArgs?.sessionId;
+    if (sessionId == null || sessionId.isEmpty) return const SizedBox.shrink();
+
+    final sessionAsync = ref.watch(sessionDetailProvider(sessionId));
+    return sessionAsync.when(
+      data: (session) {
+        if (session == null) return const SizedBox.shrink();
+        return _HomeMiniPlayer(session: session, isDark: isDark);
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+    );
+  }
+}
+
 class _HomeMiniPlayer extends StatelessWidget {
   const _HomeMiniPlayer({required this.session, required this.isDark});
 
@@ -709,9 +721,11 @@ class _HomeMiniPlayer extends StatelessWidget {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        const Text(
-                          'Nature Sounds',
-                          style: TextStyle(
+                        Text(
+                          session.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
                             color: _LightColors.textMuted,
                             fontSize: 12.5,
                           ),
@@ -797,7 +811,9 @@ class _HomeMiniPlayer extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        'Nature Sounds',
+                        session.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(color: glass.textMuted, fontSize: 12.5),
                       ),
                     ],

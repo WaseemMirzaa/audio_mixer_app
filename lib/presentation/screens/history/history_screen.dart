@@ -339,8 +339,6 @@ class _SessionListTile extends ConsumerWidget {
                 children: [
                   Text(
                     session.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: glass.textPrimary,
                       fontSize: 15,
