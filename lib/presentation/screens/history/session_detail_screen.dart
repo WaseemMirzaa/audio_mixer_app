@@ -330,19 +330,75 @@ class _SessionDetailBody extends ConsumerWidget {
             onPressed: () async {
               final ok = await showDialog<bool>(
                 context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('Delete session?'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('Cancel'),
+                barrierColor: Colors.black54,
+                builder: (ctx) {
+                  final g = SaGlass.of(ctx);
+                  return Dialog(
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
+                    child: Container(
+                      decoration: g.card(radius: 20),
+                      padding: const EdgeInsets.fromLTRB(22, 22, 22, 16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Delete session?',
+                            style: TextStyle(
+                              color: g.textPrimary,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'This session will be permanently removed. This action cannot be undone.',
+                            style: TextStyle(
+                              color: g.textMuted,
+                              fontSize: 13.5,
+                              height: 1.4,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextButton(
+                                  onPressed: () => Navigator.pop(ctx, false),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: g.textMuted,
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      side: BorderSide(color: g.divider),
+                                    ),
+                                  ),
+                                  child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w600)),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: TextButton(
+                                  onPressed: () => Navigator.pop(ctx, true),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: Colors.white,
+                                    backgroundColor: const Color(0xFFE53935),
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.w700)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                    FilledButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text('Delete'),
-                    ),
-                  ],
-                ),
+                  );
+                },
               );
               if (ok == true) {
                 await ref

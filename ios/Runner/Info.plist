@@ -57,5 +57,11 @@
 		<string>Sound Axis needs access to your music library to select audio tracks.</string>
 		<key>NSPhotoLibraryUsageDescription</key>
 		<string>Sound Axis needs access to your photos so you can choose a profile picture.</string>
+		<key>UIFileSharingEnabled</key>
+		<true/>
+		<key>LSSupportsOpeningDocumentsInPlace</key>
+		<true/>
+		<key>NSDocumentsFolderUsageDescription</key>
+		<string>Sound Axis uses your documents folder to import and export session backup files.</string>
 	</dict>
 </plist>

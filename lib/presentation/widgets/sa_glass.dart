@@ -482,13 +482,14 @@ class SaPlayerBackground extends StatelessWidget {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.bottomCenter,
-                end: const Alignment(0, -0.8),
+                end: Alignment.topCenter,
                 colors: [
                   overlay,
-                  overlay.withValues(alpha: 0.7),
-                  overlay.withValues(alpha: 0),
+                  overlay.withValues(alpha: 0.82),
+                  overlay.withValues(alpha: 0.45),
+                  overlay.withValues(alpha: 0.0),
                 ],
-                stops: const [0.0, 0.5, 1.0],
+                stops: const [0.0, 0.35, 0.65, 1.0],
               ),
             ),
           ),

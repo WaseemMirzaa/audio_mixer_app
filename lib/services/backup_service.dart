@@ -28,20 +28,24 @@ class BackupService {
 
   /// Builds the backup archive and writes it to a temp file, returning it for
   /// the caller to share/save. Throws [BackupEmpty] when there is nothing to
-  /// export.
-  Future<File> exportToFile(SessionRepository repo) async {
+  /// export. Returns the file path and the session count via [BackupExportResult].
+  Future<BackupExportResult> exportToFile(SessionRepository repo) async {
     final sessions = await repo.listSessions();
     if (sessions.isEmpty) throw const BackupEmpty();
 
     // Collect each referenced audio file once (filenames are UUIDs → unique).
     final files = <String, Uint8List>{};
+    int audioMissing = 0;
     for (final s in sessions) {
       for (final path in [s.foregroundPath, s.backgroundPath]) {
         if (path == null || path.isEmpty) continue;
         final name = p.basename(path);
         if (files.containsKey(name)) continue;
         final f = File(path);
-        if (!await f.exists()) continue;
+        if (!await f.exists()) {
+          audioMissing++;
+          continue;
+        }
         files[name] = await f.readAsBytes();
       }
     }
@@ -60,29 +64,60 @@ class BackupService {
       'files': files,
     });
 
-    final dir = await getTemporaryDirectory();
-    final out = File(p.join(dir.path, 'soundaxis_backup_${_stamp()}.zip'));
+    // Save to app Documents so the file persists across reboots.
+    // On iOS this folder is accessible via the Files app; on Android it lives
+    // in internal app storage but is shared out via the share sheet below.
+    final docs = await getApplicationDocumentsDirectory();
+    final backupsDir = Directory(p.join(docs.path, 'backups'));
+    if (!await backupsDir.exists()) await backupsDir.create(recursive: true);
+    final fileName = 'soundaxis_backup_${_stamp()}.zip';
+    final out = File(p.join(backupsDir.path, fileName));
     await out.writeAsBytes(zipBytes, flush: true);
-    return out;
+
+    return BackupExportResult(
+      file: out,
+      sessionCount: sessions.length,
+      audioFileCount: files.length,
+      audioMissingCount: audioMissing,
+    );
   }
 
-  /// Restores sessions + audio files from [zipFile]. Returns the number of
-  /// sessions imported. Throws [BackupInvalid] if the archive has no manifest.
-  Future<int> importFromFile(
+  /// Restores sessions + audio files from [zipFile].
+  /// Returns a [BackupImportResult] with counts of imported and skipped sessions.
+  /// Throws [BackupInvalid] if the archive has no manifest.
+  Future<BackupImportResult> importFromFile(
     File zipFile,
     SessionRepository repo, {
     String? uid,
   }) async {
-    final bytes = await zipFile.readAsBytes();
-    final decoded = await compute(_decodeBackupZip, bytes);
+    final Uint8List bytes;
+    try {
+      bytes = await zipFile.readAsBytes();
+    } catch (e) {
+      throw BackupInvalid('Could not read backup file: $e');
+    }
+
+    final Map<String, dynamic> decoded;
+    try {
+      decoded = await compute(_decodeBackupZip, bytes);
+    } catch (e) {
+      throw BackupInvalid('Archive is corrupt or unreadable: $e');
+    }
 
     final manifestJson = decoded['manifest'] as String?;
     if (manifestJson == null) {
-      throw const BackupInvalid('manifest.json not found');
+      throw const BackupInvalid('manifest.json not found in archive');
     }
-    final manifest = jsonDecode(manifestJson) as Map<String, dynamic>;
+
+    final Map<String, dynamic> manifest;
+    try {
+      manifest = jsonDecode(manifestJson) as Map<String, dynamic>;
+    } catch (e) {
+      throw const BackupInvalid('manifest.json is not valid JSON');
+    }
+
     final rawSessions = (manifest['sessions'] as List?) ?? const [];
-    if (rawSessions.isEmpty) return 0;
+    if (rawSessions.isEmpty) return const BackupImportResult(imported: 0, skipped: 0);
 
     // Copy audio files into this device's documents/audio folder.
     final docs = await getApplicationDocumentsDirectory();
@@ -92,7 +127,11 @@ class BackupService {
     final files = (decoded['files'] as Map).cast<String, Uint8List>();
     for (final entry in files.entries) {
       final dest = File(p.join(audioDir.path, entry.key));
-      await dest.writeAsBytes(entry.value, flush: true);
+      // Don't overwrite existing audio files — they're UUID-named so a match
+      // means the exact same file is already present.
+      if (!await dest.exists()) {
+        await dest.writeAsBytes(entry.value, flush: true);
+      }
     }
 
     // Re-point each session at the local audio files and save it.
@@ -100,18 +139,28 @@ class BackupService {
         ? old
         : p.join(audioDir.path, p.basename(old));
 
-    var count = 0;
+    // Load existing session IDs so we can skip duplicates.
+    final existing = await repo.listSessions();
+    final existingIds = {for (final s in existing) s.sessionId};
+
+    int imported = 0;
+    int skipped = 0;
     for (final raw in rawSessions) {
       final s = MixSession.fromJson(raw as Map<String, dynamic>);
+      if (existingIds.contains(s.sessionId)) {
+        skipped++;
+        continue;
+      }
       await repo.upsertSession(s.copyWith(
         foregroundPath: relocate(s.foregroundPath),
         backgroundPath: relocate(s.backgroundPath),
         uid: uid ?? s.uid,
         syncStatus: 'local',
       ));
-      count++;
+      imported++;
     }
-    return count;
+
+    return BackupImportResult(imported: imported, skipped: skipped);
   }
 
   static String _stamp() {
@@ -119,6 +168,32 @@ class BackupService {
     String two(int n) => n.toString().padLeft(2, '0');
     return '${d.year}${two(d.month)}${two(d.day)}_${two(d.hour)}${two(d.minute)}';
   }
+}
+
+// ── Result types ──────────────────────────────────────────────────────────────
+
+class BackupExportResult {
+  const BackupExportResult({
+    required this.file,
+    required this.sessionCount,
+    required this.audioFileCount,
+    required this.audioMissingCount,
+  });
+
+  final File file;
+  final int sessionCount;
+  final int audioFileCount;
+  final int audioMissingCount;
+}
+
+class BackupImportResult {
+  const BackupImportResult({
+    required this.imported,
+    required this.skipped,
+  });
+
+  final int imported;
+  final int skipped;
 }
 
 // ── compute() workers (top-level so they can run in a background isolate) ──────
@@ -155,6 +230,8 @@ Map<String, dynamic> _decodeBackupZip(Uint8List bytes) {
   }
   return {'manifest': manifestJson, 'files': files};
 }
+
+// ── Exceptions ────────────────────────────────────────────────────────────────
 
 /// Thrown by [BackupService.exportToFile] when there are no sessions to export.
 class BackupEmpty implements Exception {
