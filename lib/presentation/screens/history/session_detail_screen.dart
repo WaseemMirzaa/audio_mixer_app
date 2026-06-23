@@ -338,7 +338,7 @@ class _SessionDetailBody extends ConsumerWidget {
                     backgroundColor: Colors.transparent,
                     elevation: 0,
                     child: Container(
-                      decoration: g.card(radius: 20),
+                      decoration: g.dialogCard(radius: 20),
                       padding: const EdgeInsets.fromLTRB(22, 22, 22, 16),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,

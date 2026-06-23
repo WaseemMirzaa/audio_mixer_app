@@ -131,6 +131,27 @@ class SaGlass {
         ],
       );
 
+  /// Opaque variant for modal dialogs / confirmation screens where the
+  /// background bleed-through makes text hard to read.
+  BoxDecoration dialogCard({double radius = 16}) => BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? const [Color(0xE61A4EA0), Color(0xE60A1E48)]
+              : const [Color(0xE63CAAB9), Color(0xE60F6473)],
+        ),
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: glassBorder, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: glassShadow,
+            blurRadius: 26,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      );
+
   /// Slightly stronger glass for the hero "New Session" card.
   BoxDecoration hero({double radius = 20}) => BoxDecoration(
         gradient: LinearGradient(

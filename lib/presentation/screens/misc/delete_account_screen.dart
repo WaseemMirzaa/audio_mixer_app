@@ -22,7 +22,7 @@ class DeleteAccountScreen extends ConsumerWidget {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
           Container(
-            decoration: glass.card(radius: 20),
+            decoration: glass.dialogCard(radius: 20),
             padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
