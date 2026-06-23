@@ -194,6 +194,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                   const _AllPlansFooter(),
                   const SizedBox(height: 10),
                   _RestoreRow(busy: _busy, onRestore: _restore),
+                  const SaLegalFooter(),
                 ],
               ),
             ),

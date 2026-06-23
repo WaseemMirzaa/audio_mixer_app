@@ -181,6 +181,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 ),
               ],
             ),
+            const SaLegalFooter(topPadding: 10),
           ],
         ),
       ),

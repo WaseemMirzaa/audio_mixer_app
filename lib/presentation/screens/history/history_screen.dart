@@ -46,7 +46,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          SaGlassBackground(isDark: glass.isDark),
+          const SaPlayerBackground(),
           SafeArea(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -275,7 +275,7 @@ class _SessionListTile extends ConsumerWidget {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
         child: Stack(
           children: [
-            Positioned.fill(child: SaGlassBackground(isDark: glass.isDark)),
+            Positioned.fill(child: const SaPlayerBackground()),
             SafeArea(
               top: false,
               child: Column(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 /// Shared "SoundAxis glass" design system used by Home (dark), Sessions and
 /// Profile. Light mode = teal glass, dark mode = blue glass — both sampled from
@@ -540,9 +541,7 @@ class SaGlassScaffold extends StatelessWidget {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          splashBackground
-              ? const SaSplashBackground()
-              : SaGlassBackground(isDark: glass.isDark),
+          const SaPlayerBackground(),
           safeArea ? SafeArea(child: content) : content,
         ],
       ),
@@ -869,6 +868,54 @@ class SaSecondaryButton extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Compact "Privacy Policy · Terms of Service" footer row.
+/// Drop it at the bottom of any screen that needs legal links.
+class SaLegalFooter extends StatelessWidget {
+  const SaLegalFooter({super.key, this.topPadding = 16});
+
+  final double topPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    final glass = SaGlass.of(context);
+    final linkStyle = TextStyle(
+      color: glass.textMuted,
+      fontSize: 12,
+      fontWeight: FontWeight.w500,
+      decoration: TextDecoration.underline,
+      decorationColor: glass.textMuted.withValues(alpha: 0.5),
+    );
+    final sepStyle = TextStyle(color: glass.textMeta, fontSize: 12);
+
+    return Padding(
+      padding: EdgeInsets.only(top: topPadding, bottom: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          GestureDetector(
+            onTap: () {
+              final router = GoRouter.of(context);
+              router.push('/privacy');
+            },
+            child: Text('Privacy Policy', style: linkStyle),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text('·', style: sepStyle),
+          ),
+          GestureDetector(
+            onTap: () {
+              final router = GoRouter.of(context);
+              router.push('/terms');
+            },
+            child: Text('Terms of Service', style: linkStyle),
+          ),
+        ],
       ),
     );
   }

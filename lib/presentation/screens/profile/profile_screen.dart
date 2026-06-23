@@ -30,7 +30,7 @@ class ProfileScreen extends ConsumerWidget {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          SaGlassBackground(isDark: glass.isDark),
+          const SaPlayerBackground(),
           SafeArea(
             child: Column(
               children: [
@@ -55,6 +55,8 @@ class ProfileScreen extends ConsumerWidget {
                   onAccount: () => context.push('/account'),
                   onSubscription: () => context.push('/paywall'),
                   onAbout: () => context.push('/about'),
+                  onPrivacy: () => context.push('/privacy'),
+                  onTerms: () => context.push('/terms'),
                   onExportBackup: () => _exportBackup(context, ref),
                   onImportBackup: () => _importBackup(context, ref),
                   onReplayOnboarding: () =>
@@ -278,6 +280,8 @@ class _SettingsCard extends StatelessWidget {
   final VoidCallback onAccount;
   final VoidCallback onSubscription;
   final VoidCallback onAbout;
+  final VoidCallback onPrivacy;
+  final VoidCallback onTerms;
   final VoidCallback onExportBackup;
   final VoidCallback onImportBackup;
   final VoidCallback onReplayOnboarding;
@@ -317,6 +321,20 @@ class _SettingsCard extends StatelessWidget {
             icon: Icons.info_outline_rounded,
             title: 'About App',
             onTap: onAbout,
+          ),
+          _divider(glass),
+          _MenuTile(
+            glass: glass,
+            icon: Icons.privacy_tip_outlined,
+            title: 'Privacy Policy',
+            onTap: onPrivacy,
+          ),
+          _divider(glass),
+          _MenuTile(
+            glass: glass,
+            icon: Icons.gavel_rounded,
+            title: 'Terms of Service',
+            onTap: onTerms,
           ),
           _divider(glass),
           _MenuTile(

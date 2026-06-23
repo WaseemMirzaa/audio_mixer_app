@@ -73,6 +73,7 @@ class GetStartedScreen extends StatelessWidget {
                 ),
               ],
             ),
+            const SaLegalFooter(topPadding: 12),
           ],
         ),
       ),
