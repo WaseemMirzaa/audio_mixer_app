@@ -95,6 +95,17 @@ final sessionsProvider = FutureProvider<List<MixSession>>((ref) async {
   return ref.watch(sessionRepositoryProvider).listSessions();
 });
 
+/// Streams the live playing state from the audio handler.
+/// Emits false when the handler is not yet ready or has never played.
+final isPlayingProvider = StreamProvider<bool>((ref) {
+  try {
+    final handler = ref.watch(mixerAudioHandlerProvider);
+    return handler.playingStream;
+  } catch (_) {
+    return const Stream.empty();
+  }
+});
+
 /// One session by id (local store). Do not pass [Future] from `build` into [FutureBuilder].
 final sessionDetailProvider =
     FutureProvider.autoDispose.family<MixSession?, String>((ref, sessionId) {
