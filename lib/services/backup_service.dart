@@ -64,9 +64,14 @@ class BackupService {
       'files': files,
     });
 
-    final dir = await getTemporaryDirectory();
+    // Save to app Documents so the file persists across reboots.
+    // On iOS this folder is accessible via the Files app; on Android it lives
+    // in internal app storage but is shared out via the share sheet below.
+    final docs = await getApplicationDocumentsDirectory();
+    final backupsDir = Directory(p.join(docs.path, 'backups'));
+    if (!await backupsDir.exists()) await backupsDir.create(recursive: true);
     final fileName = 'soundaxis_backup_${_stamp()}.zip';
-    final out = File(p.join(dir.path, fileName));
+    final out = File(p.join(backupsDir.path, fileName));
     await out.writeAsBytes(zipBytes, flush: true);
 
     return BackupExportResult(

@@ -190,6 +190,8 @@ class _SettingsCard extends StatelessWidget {
     required this.onAccount,
     required this.onSubscription,
     required this.onAbout,
+    required this.onPrivacy,
+    required this.onTerms,
     required this.onExportBackup,
     required this.onImportBackup,
     required this.onReplayOnboarding,
