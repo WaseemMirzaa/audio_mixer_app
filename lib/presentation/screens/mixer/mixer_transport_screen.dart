@@ -845,7 +845,7 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
                       ),
                     ),
                     Text(
-                      'Background ambience',
+                      'Background',
                       style:
                           TextStyle(color: _glass.textMuted, fontSize: 11.5),
                     ),
