@@ -7,7 +7,6 @@ import '../../../domain/models/mix_session.dart';
 import '../../navigation/route_args.dart';
 import '../../providers/providers.dart';
 import '../../widgets/app_loading_state.dart';
-import '../../widgets/guest_sign_in_dialog.dart';
 import '../../widgets/sa_glass.dart';
 
 class HomeDashboardScreen extends ConsumerWidget {
@@ -147,13 +146,7 @@ class _LightHomeDashboard extends ConsumerWidget {
                     children: [
                       _NewSessionCard(
                         isDark: false,
-                        onTap: () {
-                          if (user?.isGuest == true) {
-                            showGuestSignInDialog(context);
-                            return;
-                          }
-                          context.push('/picker');
-                        },
+                        onTap: () => context.push('/picker'),
                       ),
                       const SizedBox(height: 24),
                       _RecentSessionsHeader(
@@ -352,13 +345,7 @@ class _DarkHomeDashboard extends ConsumerWidget {
                     children: [
                       _NewSessionCard(
                         isDark: true,
-                        onTap: () {
-                          if (user?.isGuest == true) {
-                            showGuestSignInDialog(context);
-                            return;
-                          }
-                          context.push('/picker');
-                        },
+                        onTap: () => context.push('/picker'),
                       ),
                       const SizedBox(height: 24),
                       _RecentSessionsHeader(

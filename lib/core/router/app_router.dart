@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../presentation/providers/providers.dart';
 import '../../presentation/screens/auth/forgot_password_screen.dart';
 import '../../presentation/screens/auth/login_screen.dart';
 import '../../presentation/screens/auth/signup_screen.dart';
@@ -89,21 +88,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/picker',
-        // Safety net: guests can never enter the session-creation flow.
-        // UI entry points also show a sign-in dialog before reaching here.
-        redirect: (context, state) =>
-            ref.read(authStateProvider).valueOrNull?.isGuest == true
-                ? '/home'
-                : null,
-        builder: (context, state) => const MixerBackgroundUploadScreen(),
+        // Guests CAN explore the session-creation flow; only saving/creating a
+        // session is gated (handled in the player with a sign-in dialog).
+        // A fade keeps the shared player backdrop steady, so the transition
+        // into/out of the player reads as one smooth cross-fade.
+        pageBuilder: (context, state) =>
+            _fadePage(state, const MixerBackgroundUploadScreen()),
       ),
       GoRoute(
         path: '/mixer',
-        redirect: (context, state) =>
-            ref.read(authStateProvider).valueOrNull?.isGuest == true
-                ? '/home'
-                : null,
-        builder: (context, state) => const MixerTransportScreen(),
+        pageBuilder: (context, state) =>
+            _fadePage(state, const MixerTransportScreen()),
       ),
       GoRoute(
         path: '/session/:id',
@@ -169,3 +164,22 @@ final routerProvider = Provider<GoRouter>((ref) {
   ref.onDispose(router.dispose);
   return router;
 });
+
+/// A fast cross-fade page transition. Used for the core New Session ⇄ Player
+/// flow where both screens share the same full-bleed backdrop — a plain fade
+/// avoids the default zoom/slide compositing two heavy backgrounds at once,
+/// which is what made that transition feel laggy.
+CustomTransitionPage<void> _fadePage(GoRouterState state, Widget child) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    transitionDuration: const Duration(milliseconds: 220),
+    reverseTransitionDuration: const Duration(milliseconds: 180),
+    child: child,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return FadeTransition(
+        opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+        child: child,
+      );
+    },
+  );
+}

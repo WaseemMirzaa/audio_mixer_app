@@ -7,7 +7,6 @@ import '../../../domain/models/mix_session.dart';
 import '../../navigation/route_args.dart';
 import '../../providers/providers.dart';
 import '../../widgets/app_loading_state.dart';
-import '../../widgets/guest_sign_in_dialog.dart';
 import '../../widgets/sa_glass.dart';
 
 enum _SessionFilter { all, favorites }
@@ -39,14 +38,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          final user = ref.read(authStateProvider).valueOrNull;
-          if (user?.isGuest == true) {
-            showGuestSignInDialog(context);
-            return;
-          }
-          context.push('/picker');
-        },
+        onPressed: () => context.push('/picker'),
         backgroundColor: glass.fabBg,
         elevation: 6,
         child: Icon(Icons.add_rounded, color: glass.fabIcon, size: 30),
