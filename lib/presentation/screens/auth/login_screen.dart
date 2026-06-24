@@ -50,6 +50,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       await ref
           .read(authRepositoryProvider)
           .signInWithEmail(email: _email.text.trim(), password: _password.text);
+      ref.invalidate(authStateProvider);
       ref.invalidate(sessionsProvider);
       ref.invalidate(presetsProvider);
       if (!mounted) return;
