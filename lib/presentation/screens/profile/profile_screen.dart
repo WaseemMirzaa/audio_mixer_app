@@ -16,6 +16,7 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final glass = SaGlass.of(context);
     final auth = ref.watch(authStateProvider).valueOrNull;
+    final isGuest = auth?.isGuest == true;
     final sub = ref.watch(subscriptionStreamProvider).valueOrNull;
     final themeMode = ref.watch(themeModeProvider);
     final df = DateFormat.yMMMd();
@@ -35,36 +36,62 @@ class ProfileScreen extends ConsumerWidget {
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
                     children: [
                       const SizedBox(height: 20),
+
+                      // ── User card ────────────────────────────────────────
                       _ProfileUserCard(
-                  glass: glass,
-                  user: auth,
-                  isPro: sub?.isPro == true,
-                ),
-                const SizedBox(height: 16),
-                _SettingsCard(
-                  glass: glass,
-                  themeMode: themeMode,
-                  subscriptionSubtitle: sub?.expiryMs != null
-                      ? 'Expires ${df.format(DateTime.fromMillisecondsSinceEpoch(sub!.expiryMs!))}'
-                      : 'Free tier',
-                  onAccount: () => context.push('/account'),
-                  onSubscription: () => context.push('/paywall'),
-                  onAbout: () => context.push('/about'),
-                  onPrivacy: () => context.push('/privacy'),
-                  onTerms: () => context.push('/terms'),
-                  onExportBackup: () => context.push('/backup'),
-                  onImportBackup: () => context.push('/backup'),
-                  onReplayOnboarding: () =>
-                      context.push('/onboarding?replay=1'),
-                  onThemeChanged: (dark) {
-                    ref.read(themeModeProvider.notifier).state =
-                        dark ? ThemeMode.dark : ThemeMode.light;
-                  },
-                ),
-                const SizedBox(height: 16),
+                        glass: glass,
+                        user: auth,
+                        isGuest: isGuest,
+                        isPro: sub?.isPro == true,
+                      ),
+                      const SizedBox(height: 12),
+
+                      // ── Guest sign-in banner ──────────────────────────────
+                      if (isGuest) ...[
+                        _GuestSignInBanner(glass: glass),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // ── Settings ──────────────────────────────────────────
+                      _SettingsCard(
+                        glass: glass,
+                        isGuest: isGuest,
+                        themeMode: themeMode,
+                        subscriptionSubtitle: sub?.expiryMs != null
+                            ? 'Expires ${df.format(DateTime.fromMillisecondsSinceEpoch(sub!.expiryMs!))}'
+                            : 'Free tier',
+                        onAccount: () => context.push('/account'),
+                        onSubscription: () => context.push('/paywall'),
+                        onAbout: () => context.push('/about'),
+                        onPrivacy: () => context.push('/privacy'),
+                        onTerms: () => context.push('/terms'),
+                        onExportBackup: () => context.push('/backup'),
+                        onImportBackup: () => context.push('/backup'),
+                        onReplayOnboarding: () =>
+                            context.push('/onboarding?replay=1'),
+                        onThemeChanged: (dark) {
+                          ref.read(themeModeProvider.notifier).state =
+                              dark ? ThemeMode.dark : ThemeMode.light;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      // ── Guest CTA button ──────────────────────────────────
+                      if (isGuest) ...[
+                        SaPrimaryButton(
+                          label: 'Sign In / Create Account',
+                          onPressed: () => context.go('/login'),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+
+                      // ── Log out / Exit guest ──────────────────────────────
                       SaSecondaryButton(
-                        label: 'Log Out',
-                        icon: Icons.logout_rounded,
+                        label:
+                            isGuest ? 'Exit Guest Mode' : 'Log Out',
+                        icon: isGuest
+                            ? Icons.exit_to_app_rounded
+                            : Icons.logout_rounded,
                         onPressed: () async {
                           await ref.read(authRepositoryProvider).signOut();
                           ref.invalidate(sessionsProvider);
@@ -82,8 +109,9 @@ class ProfileScreen extends ConsumerWidget {
       ),
     );
   }
-
 }
+
+// ── Header ────────────────────────────────────────────────────────────────────
 
 class _ProfileHeader extends StatelessWidget {
   const _ProfileHeader({required this.glass});
@@ -105,15 +133,19 @@ class _ProfileHeader extends StatelessWidget {
   }
 }
 
+// ── User card ─────────────────────────────────────────────────────────────────
+
 class _ProfileUserCard extends StatelessWidget {
   const _ProfileUserCard({
     required this.glass,
     required this.user,
+    required this.isGuest,
     required this.isPro,
   });
 
   final SaGlass glass;
   final AppUser? user;
+  final bool isGuest;
   final bool isPro;
 
   @override
@@ -123,14 +155,32 @@ class _ProfileUserCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       child: Row(
         children: [
-          UserAvatar(user: user, radius: 34),
+          isGuest
+              ? Container(
+                  width: 68,
+                  height: 68,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: glass.catGradients[2],
+                    ),
+                    borderRadius: BorderRadius.circular(34),
+                  ),
+                  child: const Icon(
+                    Icons.person_rounded,
+                    color: Colors.white,
+                    size: 36,
+                  ),
+                )
+              : UserAvatar(user: user, radius: 34),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  user?.displayName ?? 'John Doe',
+                  isGuest ? 'Guest' : (user?.displayName ?? 'John Doe'),
                   style: TextStyle(
                     color: glass.textPrimary,
                     fontSize: 20,
@@ -139,13 +189,15 @@ class _ProfileUserCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  user?.email ?? 'demo@app.com',
+                  isGuest
+                      ? 'Browsing as guest'
+                      : (user?.email ?? 'demo@app.com'),
                   style: TextStyle(color: glass.textMuted, fontSize: 13),
                 ),
               ],
             ),
           ),
-          if (isPro) ...[
+          if (!isGuest && isPro) ...[
             const PaywallProGlyph(width: 30),
             const SizedBox(width: 8),
             DecoratedBox(
@@ -182,9 +234,77 @@ class _ProfileUserCard extends StatelessWidget {
   }
 }
 
+// ── Guest sign-in banner ──────────────────────────────────────────────────────
+
+class _GuestSignInBanner extends StatelessWidget {
+  const _GuestSignInBanner({required this.glass});
+
+  final SaGlass glass;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: glass.hero(radius: 16),
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: glass.catGradients[0],
+              ),
+              borderRadius: BorderRadius.circular(13),
+              boxShadow: [
+                BoxShadow(
+                  color: glass.catGradients[0].last.withValues(alpha: 0.4),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: const Icon(Icons.lock_rounded, color: Colors.white, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Unlock your sessions',
+                  style: TextStyle(
+                    color: glass.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Sign in to save mixes, build history, and sync across devices.',
+                  style: TextStyle(
+                    color: glass.textMuted,
+                    fontSize: 12,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Settings card ─────────────────────────────────────────────────────────────
+
 class _SettingsCard extends StatelessWidget {
   const _SettingsCard({
     required this.glass,
+    required this.isGuest,
     required this.themeMode,
     required this.subscriptionSubtitle,
     required this.onAccount,
@@ -199,6 +319,7 @@ class _SettingsCard extends StatelessWidget {
   });
 
   final SaGlass glass;
+  final bool isGuest;
   final ThemeMode themeMode;
   final String subscriptionSubtitle;
   final VoidCallback onAccount;
@@ -211,6 +332,13 @@ class _SettingsCard extends StatelessWidget {
   final VoidCallback onReplayOnboarding;
   final ValueChanged<bool> onThemeChanged;
 
+  Widget _divider() => Divider(
+        height: 1,
+        indent: 16,
+        endIndent: 16,
+        color: glass.divider,
+      );
+
   @override
   Widget build(BuildContext context) {
     final darkOn = themeMode == ThemeMode.dark;
@@ -219,83 +347,93 @@ class _SettingsCard extends StatelessWidget {
       decoration: glass.card(radius: 20),
       child: Column(
         children: [
-          _MenuTile(
-            glass: glass,
-            icon: Icons.person_outline_rounded,
-            title: 'Account',
-            onTap: onAccount,
-          ),
-          _divider(glass),
+          // Account — signed-in users only
+          if (!isGuest) ...[
+            _MenuTile(
+              glass: glass,
+              icon: Icons.person_outline_rounded,
+              title: 'Account',
+              onTap: onAccount,
+            ),
+            _divider(),
+          ],
+
+          // Theme — always visible
           _ThemeToggleTile(
             glass: glass,
             darkOn: darkOn,
             onChanged: onThemeChanged,
           ),
-          _divider(glass),
-          _MenuTile(
-            glass: glass,
-            icon: Icons.credit_card_outlined,
-            title: 'Subscription',
-            subtitle: subscriptionSubtitle,
-            onTap: onSubscription,
-          ),
-          _divider(glass),
+
+          // Subscription — signed-in users only
+          if (!isGuest) ...[
+            _divider(),
+            _MenuTile(
+              glass: glass,
+              icon: Icons.credit_card_outlined,
+              title: 'Subscription',
+              subtitle: subscriptionSubtitle,
+              onTap: onSubscription,
+            ),
+          ],
+
+          // Always visible
+          _divider(),
           _MenuTile(
             glass: glass,
             icon: Icons.info_outline_rounded,
             title: 'About App',
             onTap: onAbout,
           ),
-          _divider(glass),
+          _divider(),
           _MenuTile(
             glass: glass,
             icon: Icons.privacy_tip_outlined,
             title: 'Privacy Policy',
             onTap: onPrivacy,
           ),
-          _divider(glass),
+          _divider(),
           _MenuTile(
             glass: glass,
             icon: Icons.gavel_rounded,
             title: 'Terms of Service',
             onTap: onTerms,
           ),
-          _divider(glass),
-          _MenuTile(
-            glass: glass,
-            icon: Icons.upload_rounded,
-            title: 'Export backup',
-            subtitle: 'Save mixed sessions and audio to a backup file',
-            onTap: onExportBackup,
-          ),
-          _divider(glass),
-          _MenuTile(
-            glass: glass,
-            icon: Icons.download_rounded,
-            title: 'Import backup',
-            subtitle: 'Restore mixed sessions from a backup file',
-            onTap: onImportBackup,
-          ),
-          _divider(glass),
-          _MenuTile(
-            glass: glass,
-            icon: Icons.auto_stories_outlined,
-            title: 'Replay onboarding',
-            subtitle: 'Walk through the intro slides again',
-            onTap: onReplayOnboarding,
-          ),
+
+          // Backup & onboarding — signed-in users only
+          if (!isGuest) ...[
+            _divider(),
+            _MenuTile(
+              glass: glass,
+              icon: Icons.upload_rounded,
+              title: 'Export backup',
+              subtitle: 'Save mixed sessions and audio to a backup file',
+              onTap: onExportBackup,
+            ),
+            _divider(),
+            _MenuTile(
+              glass: glass,
+              icon: Icons.download_rounded,
+              title: 'Import backup',
+              subtitle: 'Restore mixed sessions from a backup file',
+              onTap: onImportBackup,
+            ),
+            _divider(),
+            _MenuTile(
+              glass: glass,
+              icon: Icons.auto_stories_outlined,
+              title: 'Replay onboarding',
+              subtitle: 'Walk through the intro slides again',
+              onTap: onReplayOnboarding,
+            ),
+          ],
         ],
       ),
     );
   }
-
-  Widget _divider(SaGlass glass) => Divider(
-        height: 1,
-        indent: 16,
-        endIndent: 16,
-        color: glass.divider,
-      );
 }
+
+// ── Shared tile widgets ───────────────────────────────────────────────────────
 
 class _MenuTile extends StatelessWidget {
   const _MenuTile({
@@ -402,4 +540,3 @@ class _ThemeToggleTile extends StatelessWidget {
     );
   }
 }
-
