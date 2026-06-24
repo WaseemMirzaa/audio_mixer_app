@@ -62,7 +62,7 @@ class _GuestSignInDialog extends StatelessWidget {
 
             // ── Title ────────────────────────────────────────────────────
             Text(
-              'Sign In to Continue',
+              'Sign In to Save Your Mix',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: glass.textPrimary,
@@ -76,7 +76,9 @@ class _GuestSignInDialog extends StatelessWidget {
 
             // ── Body ─────────────────────────────────────────────────────
             Text(
-              'Guest accounts can\'t save or create sessions. Sign in or create a free account to save your mixes, build a history, and sync across devices.',
+              'You\'re exploring as a guest. Sign in or create a free account to '
+              'save this session, build your history, and sync across devices — '
+              'it only takes a moment.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: glass.textMuted,

@@ -284,13 +284,16 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
 
   // ── Save ────────────────────────────────────────────────────────────────────
 
-  Future<void> _saveSession() async {
+  /// Persists the current session. Returns `true` on success, `false` when the
+  /// save was blocked (guest, missing title/tracks) so the caller can keep the
+  /// editor open instead of collapsing to the player view.
+  Future<bool> _saveSession() async {
     // Guest guard — guests cannot save sessions.
     final user = ref.read(authStateProvider).valueOrNull;
     if (user?.isGuest == true) {
-      if (!mounted) return;
+      if (!mounted) return false;
       showGuestSignInDialog(context);
-      return;
+      return false;
     }
 
     // Validate mandatory title.
@@ -299,7 +302,7 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Title is required')),
       );
-      return;
+      return false;
     }
 
     // Flush text-field edits back into the draft before saving.
@@ -314,11 +317,11 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
     final ui = ref.read(mixerUiProvider);
     final uid = ref.read(authStateProvider).valueOrNull?.uid ?? 'guest';
     if (draft?.foreground == null || draft?.background == null) {
-      if (!mounted) return;
+      if (!mounted) return false;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Two tracks are required')),
       );
-      return;
+      return false;
     }
     final now = DateTime.now().millisecondsSinceEpoch;
     final sid = draft!.sessionId ?? const Uuid().v4();
@@ -361,10 +364,11 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
         draft.copyWith(sessionId: sid);
     // Refresh sessions list on Home and History.
     ref.invalidate(sessionsProvider);
-    if (!mounted) return;
+    if (!mounted) return false;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Session saved')),
     );
+    return true;
   }
 
   // ── Theme helpers ───────────────────────────────────────────────────────────
@@ -531,8 +535,8 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
     return GestureDetector(
       onTap: () async {
         if (_editing) {
-          await _saveSession();
-          if (!mounted) return;
+          final saved = await _saveSession();
+          if (!mounted || !saved) return;
           setState(() => _editing = false);
         } else {
           setState(() => _editing = true);
