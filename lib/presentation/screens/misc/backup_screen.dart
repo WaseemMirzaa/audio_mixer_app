@@ -326,9 +326,12 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'All your sessions and their audio files are bundled into a '
-                  'single ZIP file. Share it to Files, Google Drive, email, or '
-                  'any app on your device.',
+                  Platform.isIOS
+                      ? 'All your sessions and their audio files are bundled '
+                          'into a single ZIP file saved to the Files app.'
+                      : 'All your sessions and their audio files are bundled '
+                          'into a single ZIP file. Share it to Files, Google '
+                          'Drive, email, or any app on your device.',
                   style: TextStyle(
                     color: glass.textMuted,
                     fontSize: 13,
@@ -345,12 +348,16 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
                   enabled: !_exporting && !_importing && sessionCount > 0,
                   onPressed: _exporting ? null : _saveLocally,
                 ),
-                const SizedBox(height: 10),
-                SaSecondaryButton(
-                  label: _exporting ? 'Preparing…' : 'Share / Export',
-                  icon: Icons.share_rounded,
-                  onPressed: (!_exporting && !_importing && sessionCount > 0) ? _export : null,
-                ),
+                // Share / Export is hidden on iOS — "Save to Files" already
+                // routes through the Files app there.
+                if (!Platform.isIOS) ...[
+                  const SizedBox(height: 10),
+                  SaSecondaryButton(
+                    label: _exporting ? 'Preparing…' : 'Share / Export',
+                    icon: Icons.share_rounded,
+                    onPressed: (!_exporting && !_importing && sessionCount > 0) ? _export : null,
+                  ),
+                ],
                 if (sessionCount == 0) ...[
                   const SizedBox(height: 8),
                   Text(
@@ -443,10 +450,6 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
                   _Tip(
                     glass: glass,
                     text: '"Save to Files" saves the ZIP directly — find it in Files → On My iPhone → SoundAxis.',
-                  ),
-                  _Tip(
-                    glass: glass,
-                    text: '"Share / Export" lets you send via AirDrop, Mail, iCloud Drive, or any app.',
                   ),
                   _Tip(
                     glass: glass,
