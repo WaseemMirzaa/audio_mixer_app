@@ -8,16 +8,40 @@ import io.flutter.plugin.common.MethodChannel
 // AudioService can communicate with the Flutter engine over IPC.
 class MainActivity : AudioServiceActivity() {
 
-    private val channelName = "com.codetivelab.soundAxis/audio_effects"
+    private val effectsChannelName = "com.codetivelab.soundAxis/audio_effects"
+    private val backupChannelName = "com.codetivelab.soundAxis/backup_export"
     private val effectsPlugin = AudioEffectsPlugin()
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        val channel = MethodChannel(
+        MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
-            channelName,
-        )
-        channel.setMethodCallHandler(effectsPlugin)
+            effectsChannelName,
+        ).setMethodCallHandler(effectsPlugin)
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            backupChannelName,
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "saveToPublicDownloads" -> {
+                    try {
+                        val sourcePath = call.argument<String>("sourcePath")
+                        val displayName = call.argument<String>("displayName")
+                        if (sourcePath.isNullOrBlank() || displayName.isNullOrBlank()) {
+                            result.error("INVALID_ARGS", "Missing backup path or name", null)
+                            return@setMethodCallHandler
+                        }
+                        val saved = BackupExportHandler(this)
+                            .saveToDownloads(sourcePath, displayName)
+                        result.success(saved)
+                    } catch (e: Exception) {
+                        result.error("SAVE_FAILED", e.message, null)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
     }
 
     override fun onDestroy() {

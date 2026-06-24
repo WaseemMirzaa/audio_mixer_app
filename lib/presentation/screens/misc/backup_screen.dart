@@ -12,6 +12,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../data/local/prefs_keys.dart';
+import '../../../services/android_backup_export.dart';
 import '../../../services/backup_service.dart';
 import '../../providers/providers.dart';
 import '../../widgets/sa_glass.dart';
@@ -50,15 +51,26 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
 
       File savedFile = result.file;
       String locationLabel;
+      var savedToPublicDownloads = false;
 
       if (Platform.isAndroid) {
-        final downloadsDir = await getDownloadsDirectory();
-        if (downloadsDir != null) {
-          final dest = File(p.join(downloadsDir.path, p.basename(result.file.path)));
-          savedFile = await result.file.copy(dest.path);
-          locationLabel = 'Downloads';
+        final fileName = p.basename(result.file.path);
+        final androidSave = await AndroidBackupExport.saveToPublicDownloads(
+          sourcePath: result.file.path,
+          displayName: fileName,
+        );
+        if (androidSave != null) {
+          savedFile = result.file;
+          locationLabel = androidSave.location;
+          savedToPublicDownloads = true;
         } else {
-          locationLabel = 'Documents/backups';
+          final downloadsDir = await getDownloadsDirectory();
+          if (downloadsDir != null) {
+            final dest =
+                File(p.join(downloadsDir.path, p.basename(result.file.path)));
+            savedFile = await result.file.copy(dest.path);
+          }
+          locationLabel = 'app storage (use Share / Export instead)';
         }
       } else {
         locationLabel = 'Files app → On My iPhone → SoundAxis';
@@ -73,10 +85,32 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            'Saved to $locationLabel: ${p.basename(savedFile.path)}'
-            '${result.audioMissingCount > 0 ? ' (${result.audioMissingCount} audio file${result.audioMissingCount == 1 ? '' : 's'} missing)' : ''}',
+            savedToPublicDownloads
+                ? 'Saved to Downloads as ${p.basename(savedFile.path)}. '
+                    'Open Files or My Files → Downloads to find it.'
+                : Platform.isAndroid
+                    ? 'Could not save to Downloads. Use Share / Export to '
+                        'save the backup to another app or folder.'
+                    : 'Saved to $locationLabel: ${p.basename(savedFile.path)}'
+                        '${result.audioMissingCount > 0 ? ' (${result.audioMissingCount} audio file${result.audioMissingCount == 1 ? '' : 's'} missing)' : ''}',
           ),
-          duration: const Duration(seconds: 5),
+          duration: const Duration(seconds: 6),
+          action: Platform.isAndroid && !savedToPublicDownloads
+              ? SnackBarAction(
+                  label: 'Share',
+                  onPressed: () {
+                    Share.shareXFiles(
+                      [
+                        XFile(
+                          result.file.path,
+                          mimeType: 'application/zip',
+                        ),
+                      ],
+                      subject: 'Sound Axis backup',
+                    );
+                  },
+                )
+              : null,
         ),
       );
     } on BackupEmpty {
@@ -331,14 +365,27 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
                       ? 'All your sessions and their audio files are bundled '
                           'into a single ZIP file saved to the Files app.'
                       : 'All your sessions and their audio files are bundled '
-                          'into a single ZIP file. Share it to Files, Google '
-                          'Drive, email, or any app on your device.',
+                          'into a single ZIP file. Tap "Save to Downloads" to '
+                          'store it on your phone, or use Share / Export for '
+                          'Google Drive, email, and other apps.',
                   style: TextStyle(
                     color: glass.textMuted,
                     fontSize: 13,
                     height: 1.45,
                   ),
                 ),
+                if (Platform.isAndroid) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'After saving, open Files or My Files → Downloads. '
+                    'The file is named soundaxis_backup_ with the date and time.',
+                    style: TextStyle(
+                      color: glass.textMeta,
+                      fontSize: 12.5,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 SaPrimaryButton(
                   label: _exporting
@@ -459,15 +506,28 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
                 ] else ...[
                   _Tip(
                     glass: glass,
-                    text: '"Save to Downloads" saves the ZIP directly to your phone\'s Downloads folder.',
+                    text: '"Save to Downloads" copies the ZIP into your phone\'s '
+                        'public Downloads folder (visible in Files / My Files).',
                   ),
                   _Tip(
                     glass: glass,
-                    text: '"Share / Export" opens the share sheet — useful for Google Drive, email, etc.',
+                    text: 'Open Files or My Files → Downloads. Look for '
+                        'soundaxis_backup_ followed by the date and time.',
                   ),
                   _Tip(
                     glass: glass,
-                    text: 'To import, tap "Import Backup" and pick the ZIP from Downloads or another folder.',
+                    text: 'From Downloads you can share it to Google Drive, '
+                        'email, or another device.',
+                  ),
+                  _Tip(
+                    glass: glass,
+                    text: '"Share / Export" opens the share sheet right away — '
+                        'useful if you do not need to keep a copy in Downloads.',
+                  ),
+                  _Tip(
+                    glass: glass,
+                    text: 'To import, tap "Import Backup" and pick the ZIP from '
+                        'Downloads or another folder.',
                   ),
                 ],
               ],
