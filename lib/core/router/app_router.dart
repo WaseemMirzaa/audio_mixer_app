@@ -89,10 +89,20 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/picker',
+        // Safety net: guests can never enter the session-creation flow.
+        // UI entry points also show a sign-in dialog before reaching here.
+        redirect: (context, state) =>
+            ref.read(authStateProvider).valueOrNull?.isGuest == true
+                ? '/home'
+                : null,
         builder: (context, state) => const MixerBackgroundUploadScreen(),
       ),
       GoRoute(
         path: '/mixer',
+        redirect: (context, state) =>
+            ref.read(authStateProvider).valueOrNull?.isGuest == true
+                ? '/home'
+                : null,
         builder: (context, state) => const MixerTransportScreen(),
       ),
       GoRoute(
