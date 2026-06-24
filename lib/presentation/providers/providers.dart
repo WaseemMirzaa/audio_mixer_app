@@ -92,7 +92,11 @@ final mixerReadyProvider = StateProvider<bool>((ref) => false);
 final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.light);
 
 final sessionsProvider = FutureProvider<List<MixSession>>((ref) async {
-  return ref.watch(sessionRepositoryProvider).listSessions();
+  final uid = ref.watch(authStateProvider).valueOrNull?.uid;
+  if (uid == null) return [];
+  final all = await ref.watch(sessionRepositoryProvider).listSessions();
+  // Isolate sessions per user — guests and different accounts never share history.
+  return all.where((s) => s.uid == uid).toList();
 });
 
 /// Streams the live playing state from the audio handler.
