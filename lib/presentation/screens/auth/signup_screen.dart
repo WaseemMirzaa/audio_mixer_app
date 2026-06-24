@@ -61,6 +61,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             email: _email.text.trim(),
             password: _pw.text,
           );
+      ref.invalidate(authStateProvider);
       ref.invalidate(sessionsProvider);
       ref.invalidate(presetsProvider);
       if (!mounted) return;

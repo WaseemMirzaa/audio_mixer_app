@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -88,15 +89,44 @@ class FirebaseAuthRepository implements AuthRepository {
 
   @override
   Stream<AppUser?> authState() {
-    // For each signed-in user, follow their profile document's snapshots so
-    // edits (display name, avatar, theme) propagate live. The profile stream is
-    // decoupled from auth: an auth-only user is emitted immediately, and any
-    // Firestore error is swallowed (logged) so a backend/rules problem never
-    // signs the user out of the UI.
-    return _auth.authStateChanges().asyncExpand((u) {
-      if (u == null) return Stream<AppUser?>.value(null);
-      return _profileStream(u);
-    });
+    // Uses switchMap semantics: each new auth event cancels the previous
+    // Firestore profile stream so auth transitions (e.g. anonymous → email)
+    // are never blocked by an infinite sub-stream.
+    late StreamController<AppUser?> controller;
+    StreamSubscription<AppUser?>? profileSub;
+    StreamSubscription<User?>? authSub;
+
+    controller = StreamController<AppUser?>(
+      onListen: () {
+        authSub = _auth.authStateChanges().listen(
+          (u) {
+            profileSub?.cancel();
+            profileSub = null;
+            if (u == null) {
+              controller.add(null);
+            } else {
+              profileSub = _profileStream(u).listen(
+                controller.add,
+                onError: (Object e) {
+                  debugPrint(
+                      '[FirebaseAuthRepository] profile stream error: $e');
+                },
+              );
+            }
+          },
+          onError: controller.addError,
+          onDone: controller.close,
+        );
+      },
+      onCancel: () {
+        profileSub?.cancel();
+        profileSub = null;
+        authSub?.cancel();
+        authSub = null;
+      },
+    );
+
+    return controller.stream;
   }
 
   Stream<AppUser?> _profileStream(User u) async* {
