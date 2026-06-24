@@ -12,6 +12,7 @@ import '../../../domain/models/mixer_state.dart';
 import '../../../domain/models/mix_session.dart';
 import '../../providers/providers.dart';
 import '../../widgets/app_layout.dart';
+import '../../widgets/guest_sign_in_dialog.dart';
 import '../../widgets/sa_glass.dart';
 import '../../widgets/mixer_gradient_slider_track.dart';
 import 'mixer_flow_support.dart';
@@ -284,6 +285,14 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
   // ── Save ────────────────────────────────────────────────────────────────────
 
   Future<void> _saveSession() async {
+    // Guest guard — guests cannot save sessions.
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user?.isGuest == true) {
+      if (!mounted) return;
+      showGuestSignInDialog(context);
+      return;
+    }
+
     // Validate mandatory title.
     final titleText = _titleCtrl.text.trim();
     if (titleText.isEmpty) {
