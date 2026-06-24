@@ -193,6 +193,7 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
         uid: uid,
       );
       ref.invalidate(sessionsProvider);
+      refreshSessionsList(ref);
       if (!mounted) return;
 
       final msg = result.imported == 0
@@ -207,7 +208,7 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
       messenger.showSnackBar(SnackBar(content: Text(msg)));
     } on BackupInvalid catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text('Invalid backup: ${e.message}')));
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(SnackBar(content: Text('Import failed: $e')));

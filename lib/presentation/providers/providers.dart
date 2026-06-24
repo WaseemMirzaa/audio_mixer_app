@@ -13,6 +13,7 @@ import '../../data/repositories/mock/mock_preset_repository.dart';
 import '../../data/repositories/mock/mock_session_repository.dart';
 import '../../domain/models/app_user.dart';
 import '../../domain/models/mix_session.dart';
+import '../../domain/models/session_sort.dart';
 import '../../domain/models/mixer_state.dart';
 import '../../domain/models/preset.dart';
 import '../navigation/route_args.dart';
@@ -91,13 +92,23 @@ final mixerReadyProvider = StateProvider<bool>((ref) => false);
 
 final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.light);
 
+/// Increment to force [sessionsProvider] to refetch (e.g. after save on mixer).
+final sessionsRevisionProvider = StateProvider<int>((ref) => 0);
+
 final sessionsProvider = FutureProvider<List<MixSession>>((ref) async {
+  ref.watch(sessionsRevisionProvider);
   final uid = ref.watch(authStateProvider).valueOrNull?.uid;
   if (uid == null) return [];
   final all = await ref.watch(sessionRepositoryProvider).listSessions();
-  // Isolate sessions per user — guests and different accounts never share history.
-  return all.where((s) => s.uid == uid).toList();
+  final owned = all.where((s) => s.uid == uid).toList();
+  return sortSessionsByRecent(owned);
 });
+
+/// Call after any local session list mutation so Home + Sessions stay in sync.
+void refreshSessionsList(WidgetRef ref) {
+  ref.read(sessionsRevisionProvider.notifier).state++;
+  ref.invalidate(sessionsProvider);
+}
 
 /// Streams the live playing state from the audio handler.
 /// Emits false when the handler is not yet ready or has never played.

@@ -23,7 +23,7 @@ class MockSessionRepository implements SessionRepository {
       final sessions = list
           .map((e) => MixSession.fromJson(e as Map<String, dynamic>))
           .toList();
-      sessions.sort((a, b) => b.createdAtMs.compareTo(a.createdAtMs));
+      sessions.sort((a, b) => b.updatedAtMs.compareTo(a.updatedAtMs));
       return sessions;
     } catch (_) {
       return [];

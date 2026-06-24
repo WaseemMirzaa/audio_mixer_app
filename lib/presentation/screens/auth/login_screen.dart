@@ -102,7 +102,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: IconButton(
-                  onPressed: () => context.pop(),
+                  onPressed: () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go('/get-started');
+                    }
+                  },
                   icon: Icon(
                     Icons.chevron_left_rounded,
                     color: glass.textPrimary,

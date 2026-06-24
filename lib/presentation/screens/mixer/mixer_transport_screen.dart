@@ -363,7 +363,7 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
     ref.read(mixerDraftProvider.notifier).state =
         draft.copyWith(sessionId: sid);
     // Refresh sessions list on Home and History.
-    ref.invalidate(sessionsProvider);
+    refreshSessionsList(ref);
     if (!mounted) return false;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Session saved')),
@@ -747,7 +747,7 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
             child: Image.asset(
               'assets/branding/book_with_headseat.png',
               fit: BoxFit.contain,
-              filterQuality: FilterQuality.high,
+              filterQuality: FilterQuality.medium,
             ),
           ),
           // Music notes scattered on top of the artwork.
@@ -1798,10 +1798,37 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
 
   // ── Build ────────────────────────────────────────────────────────────────────
 
+  /// Playback position ticks often — isolate from mix/editor widgets.
+  static int _transportTick(MixerUiState u) => Object.hash(
+        u.positionMs,
+        u.durationMs,
+        u.isPlaying,
+        u.bgPositionMs,
+        u.bgDurationMs,
+        u.playbackSpeed,
+      );
+
+  /// Mix controls — excludes position so scrolling stays smooth while playing.
+  static int _mixControlsTick(MixerUiState u) => Object.hash(
+        u.fgVolume,
+        u.bgVolume,
+        u.fgMuted,
+        u.bgMuted,
+        u.masterGain,
+        u.fgEq,
+        u.bgEq,
+        u.fgBassBoost,
+        u.bgBassBoost,
+        u.fgVirtualizer,
+        u.bgVirtualizer,
+        u.fgLoudness,
+        u.bgLoudness,
+        u.isPlaying,
+      );
+
   @override
   Widget build(BuildContext context) {
     final draft = ref.watch(mixerDraftProvider);
-    final ui = ref.watch(mixerUiProvider);
 
     if (_loading) {
       return _scaffold(
@@ -1825,77 +1852,101 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
     }
 
     final d = draft!;
-    final total = ui.durationMs <= 0 ? 1 : ui.durationMs;
-    final progress = (ui.positionMs / total).clamp(0.0, 1.0);
 
     return _scaffold(
       body: SafeArea(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ── "Now Playing" header (pinned) ──
+            // ── Pinned action bar (back · title · edit/save) ──
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18),
+              padding: const EdgeInsets.fromLTRB(18, 4, 18, 10),
               child: _playerHeader(),
             ),
             Expanded(
               child: ListView(
-                clipBehavior: Clip.none,
-                padding: const EdgeInsets.fromLTRB(18, 6, 18, 32),
+                clipBehavior: Clip.hardEdge,
+                cacheExtent: 480,
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 32),
                 children: [
-                  const SizedBox(height: 6),
-
-                  // ── Artwork ──
-                  _artworkSection(
-                    _titleCtrl.text.trim().isEmpty
-                        ? 'Untitled session'
-                        : _titleCtrl.text.trim(),
+                  Consumer(
+                    builder: (context, ref, _) {
+                      ref.watch(
+                        mixerUiProvider.select(_transportTick),
+                      );
+                      final ui = ref.read(mixerUiProvider);
+                      final total =
+                          ui.durationMs <= 0 ? 1 : ui.durationMs;
+                      final progress =
+                          (ui.positionMs / total).clamp(0.0, 1.0);
+                      return RepaintBoundary(
+                        child: _playerHeroSection(
+                          draft: d,
+                          progress: progress,
+                          ui: ui,
+                        ),
+                      );
+                    },
                   ),
-            const SizedBox(height: 12),
-
-            // ── Editable title + track subtitle ──
-            _trackTitleInfo('with ${d.background!.displayName}'),
-            const SizedBox(height: 12),
-
-            // ── Progress + transport + secondary controls ──
-            _playbackCard(progress, ui),
-            const SizedBox(height: 14),
-
-            // ── Ambient (background) quick control ──
-            _ambientBar(ui, d.background!.displayName),
-
-            // ── Equalizer + mix editor (revealed by the Edit button) ──
-            if (_editing) ...[
-              const SizedBox(height: 18),
-
-              // ── Track mixer (both layers) ──
-              _tracksCard(
-                ui,
-                d.foreground!.displayName,
-                d.background!.displayName,
-              ),
-              const SizedBox(height: 12),
-
-              // ── Shared 5-band EQ ──
-              _sharedEqCard(ui),
-              const SizedBox(height: 12),
-
-              // ── Shared sound effects ──
-              _effectsCard(ui),
-              const SizedBox(height: 12),
-
-              // ── Master volume ──
-              _masterCard(ui),
-              const SizedBox(height: 12),
-
-              // ── Session notes ──
-              _notesCard(),
-            ],
+                  if (_editing)
+                    Consumer(
+                      builder: (context, ref, _) {
+                        ref.watch(
+                          mixerUiProvider.select(_mixControlsTick),
+                        );
+                        final ui = ref.read(mixerUiProvider);
+                        return RepaintBoundary(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              const SizedBox(height: 18),
+                              _tracksCard(
+                                ui,
+                                d.foreground!.displayName,
+                                d.background!.displayName,
+                              ),
+                              const SizedBox(height: 12),
+                              _sharedEqCard(ui),
+                              const SizedBox(height: 12),
+                              _effectsCard(ui),
+                              const SizedBox(height: 12),
+                              _masterCard(ui),
+                              const SizedBox(height: 12),
+                              _notesCard(),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                 ],
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  /// Artwork, title, transport, and ambient — scrolls below the pinned action bar.
+  Widget _playerHeroSection({
+    required MixerDraft draft,
+    required double progress,
+    required MixerUiState ui,
+  }) {
+    final title = _titleCtrl.text.trim().isEmpty
+        ? 'Untitled session'
+        : _titleCtrl.text.trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _artworkSection(title),
+        const SizedBox(height: 12),
+        _trackTitleInfo('with ${draft.background!.displayName}'),
+        const SizedBox(height: 12),
+        _playbackCard(progress, ui),
+        const SizedBox(height: 14),
+        _ambientBar(ui, draft.background!.displayName),
+      ],
     );
   }
 }

@@ -47,7 +47,6 @@ class GetStartedScreen extends StatelessWidget {
             ),
             const SizedBox(height: 28),
             SaPrimaryButton(
-              dark: true,
               label: 'Get Started',
               icon: Icons.arrow_forward_rounded,
               onPressed: () => context.go('/signup'),

@@ -76,7 +76,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
         body: Stack(
           fit: StackFit.expand,
           children: [
-            const SaSplashBackground(),
+            const SaPlayerBackground(),
             SafeArea(
               child: Column(
                 children: [

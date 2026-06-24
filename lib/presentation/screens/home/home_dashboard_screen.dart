@@ -910,8 +910,7 @@ class _SessionList extends StatelessWidget {
   Widget build(BuildContext context) {
     return sessions.when(
       data: (list) {
-        final slice = list.take(3).toList();
-        if (slice.isEmpty) {
+        if (list.isEmpty) {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 24),
             child: Text(
@@ -922,9 +921,9 @@ class _SessionList extends StatelessWidget {
         }
         return Column(
           children: [
-            for (var i = 0; i < slice.length; i++) ...[
+            for (var i = 0; i < list.length; i++) ...[
               if (i > 0) const SizedBox(height: 12),
-              builder(slice[i], i),
+              builder(list[i], i),
             ],
           ],
         );

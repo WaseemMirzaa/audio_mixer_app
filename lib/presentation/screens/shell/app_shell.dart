@@ -1,11 +1,13 @@
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../providers/providers.dart';
 
-class AppShell extends StatelessWidget {
+class AppShell extends ConsumerWidget {
   const AppShell({super.key, required this.shell});
 
   final StatefulNavigationShell shell;
@@ -22,7 +24,7 @@ class AppShell extends StatelessWidget {
   static const lightInactive = Color(0xFF6F9CA6);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final inactive =
         isDark ? Colors.white.withValues(alpha: 0.38) : lightInactive;
@@ -55,7 +57,10 @@ class AppShell extends StatelessWidget {
                   selectedIcon: Icons.home_rounded,
                   selected: shell.currentIndex == 0,
                   inactiveColor: inactive,
-                  onTap: () => shell.goBranch(0, initialLocation: true),
+                  onTap: () {
+                    shell.goBranch(0, initialLocation: true);
+                    refreshSessionsList(ref);
+                  },
                 ),
                 _NavItem(
                   label: 'Sessions',
