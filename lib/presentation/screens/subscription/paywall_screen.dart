@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../data/repositories/mock/mock_subscription_repository.dart';
 import '../../providers/providers.dart';
+import '../../widgets/guest_sign_in_dialog.dart';
 import '../../widgets/sa_glass.dart';
 import 'paywall_plan_glyphs.dart';
 
@@ -32,6 +33,13 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   }
 
   Future<void> _continue() async {
+    // Guest guard — guests must sign in before purchasing.
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user?.isGuest == true) {
+      if (!mounted) return;
+      showGuestSignInDialog(context);
+      return;
+    }
     final repo = ref.read(subscriptionRepositoryProvider);
     switch (_selected) {
       case _PaywallPlan.free:
@@ -44,6 +52,13 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   }
 
   Future<void> _restore() async {
+    // Guest guard — guests must sign in before restoring purchases.
+    final user = ref.read(authStateProvider).valueOrNull;
+    if (user?.isGuest == true) {
+      if (!mounted) return;
+      showGuestSignInDialog(context);
+      return;
+    }
     await _run(
       () => ref.read(subscriptionRepositoryProvider).restorePurchases(),
     );
