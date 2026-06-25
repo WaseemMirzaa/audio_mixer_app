@@ -18,7 +18,6 @@ class AboutAppScreen extends StatelessWidget {
         onBack: () => context.pop(),
       ),
       child: ListView(
-        clipBehavior: Clip.none,
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
           Container(

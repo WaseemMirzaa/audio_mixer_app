@@ -104,7 +104,6 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
         onBack: () => context.pop(),
       ),
       child: ListView(
-        clipBehavior: Clip.none,
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
         children: [
           const _PaywallHero(),

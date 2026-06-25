@@ -16,7 +16,6 @@ class TermsOfServiceScreen extends StatelessWidget {
         onBack: () => context.pop(),
       ),
       child: ListView(
-        clipBehavior: Clip.none,
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
         children: [
           _Section(

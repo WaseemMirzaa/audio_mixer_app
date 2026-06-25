@@ -485,13 +485,13 @@ class SaPlayerBackground extends StatelessWidget {
 
   /// Bottom anchor tone — deep teal in light, near-black navy in dark. Matches
   /// the Home gradient's bottom stop so the fade lands on the established tone.
-  static const _overlayLight = Color(0xFF023D4E);
-  static const _overlayDark = Color(0xFF010A1B);
+  static const overlayLight = Color(0xFF023D4E);
+  static const overlayDark = Color(0xFF010A1B);
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final overlay = isDark ? _overlayDark : _overlayLight;
+    final overlay = isDark ? overlayDark : overlayLight;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -536,8 +536,8 @@ class SaGlassScaffold extends StatelessWidget {
 
   final Widget child;
 
-  /// Optional sticky header pinned above [child]. It stays fixed on the screen
-  /// background while [child] (a scrollable) scrolls underneath it.
+  /// Optional sticky header pinned above [child]. The header stays transparent;
+  /// scrollable content is clipped below it so it cannot paint into the bar.
   final Widget? header;
   final EdgeInsetsGeometry headerPadding;
   final Widget? floatingActionButton;
@@ -547,13 +547,13 @@ class SaGlassScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final glass = SaGlass.of(context);
     final content = header == null
         ? child
         : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(padding: headerPadding, child: header!),
-              Expanded(child: child),
+              Expanded(child: ClipRect(child: child)),
             ],
           );
     return Scaffold(
