@@ -1048,8 +1048,8 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 46,
-        height: 46,
+        // width: 46,
+        // height: 46,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           border: Border.all(color: _glass.glassBorder, width: 1.8),
