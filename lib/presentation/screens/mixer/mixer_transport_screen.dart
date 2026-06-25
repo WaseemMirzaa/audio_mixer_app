@@ -1043,7 +1043,7 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
     );
   }
 
-  /// Outlined circular ±15s skip button with ring arrow + "15" in the center.
+  /// Outlined circular ±15s skip button with curved replay arrow + "15".
   Widget _skip15Button({required bool forward, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
@@ -1057,19 +1057,23 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            Icon(
-              forward
-                  ? Icons.arrow_circle_right_outlined
-                  : Icons.arrow_circle_left_outlined,
-              size: 32,
-              color: _glass.textPrimary.withValues(alpha: 0.85),
+            Transform(
+              alignment: Alignment.center,
+              transform: forward
+                  ? (Matrix4.identity()..scaleByDouble(-1.0, 1.0, 1.0, 1.0))
+                  : Matrix4.identity(),
+              child: Icon(
+                Icons.replay_rounded,
+                size: 35,
+                color: _glass.textPrimary.withValues(alpha: 0.85),
+              ),
             ),
             Padding(
-              padding: const EdgeInsets.all(3.0),
+              padding: const EdgeInsets.only(top: 4.0),
               child: Text(
                 '15',
                 style: TextStyle(
-                  fontSize: 8,
+                  fontSize: 9,
                   fontWeight: FontWeight.w700,
                   color: _glass.textPrimary,
                   height: 1,
