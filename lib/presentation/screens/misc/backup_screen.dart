@@ -252,15 +252,7 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
   }
 
   /// Returns the Android SDK version, or null if it cannot be determined.
-  Future<int?> _androidSdk() async {
-    try {
-      // android_id or similar won't give SDK, but we can use a pragmatic test:
-      // permission_handler already handles SDK-specific behaviour internally.
-      return null; // Let permission_handler decide.
-    } catch (_) {
-      return null;
-    }
-  }
+  Future<int?> _androidSdk() => AndroidBackupExport.androidSdkInt();
 
   @override
   Widget build(BuildContext context) {

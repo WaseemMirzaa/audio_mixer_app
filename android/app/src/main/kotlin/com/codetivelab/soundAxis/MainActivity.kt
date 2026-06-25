@@ -1,5 +1,6 @@
 package com.codetivelab.soundAxis
 
+import android.os.Build
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -24,6 +25,7 @@ class MainActivity : AudioServiceActivity() {
             backupChannelName,
         ).setMethodCallHandler { call, result ->
             when (call.method) {
+                "getSdkInt" -> result.success(Build.VERSION.SDK_INT)
                 "saveToPublicDownloads" -> {
                     try {
                         val sourcePath = call.argument<String>("sourcePath")
