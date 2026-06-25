@@ -1064,13 +1064,16 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
               size: 32,
               color: _glass.textPrimary.withValues(alpha: 0.85),
             ),
-            Text(
-              '15',
-              style: TextStyle(
-                fontSize: 8,
-                fontWeight: FontWeight.w700,
-                color: _glass.textPrimary,
-                height: 1,
+            Padding(
+              padding: const EdgeInsets.all(3.0),
+              child: Text(
+                '15',
+                style: TextStyle(
+                  fontSize: 8,
+                  fontWeight: FontWeight.w700,
+                  color: _glass.textPrimary,
+                  height: 1,
+                ),
               ),
             ),
           ],

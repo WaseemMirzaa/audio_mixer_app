@@ -99,122 +99,112 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     final yearly = _period == _BillingPeriod.yearly;
 
     return SaGlassScaffold(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SaBackHeader(
-              title: 'Membership',
-              onBack: () => context.pop(),
-            ),
-            Expanded(
-              child: ListView(
-                clipBehavior: Clip.none,
-                padding: const EdgeInsets.only(top: 4, bottom: 24),
-                children: [
-                  const _PaywallHero(),
-                  const SizedBox(height: 18),
-                  _BillingTabs(
-                    period: _period,
-                    onChanged: (p) => setState(() => _period = p),
-                  ),
-                  const SizedBox(height: 18),
-                  // Basic → free
-                  _PlanCard(
-                    iconGlyph: PaywallBasicGlyph(
-                        color: SaGlass.of(context).cyan, width: 22),
-                    name: 'Basic',
-                    nameColor: null, // textPrimary
-                    sub: '2 hours listening time per month',
-                    subColor: null, // textMuted
-                    price: '£0.00',
-                    priceColor: null, // textPrimary
-                    priceNote: 'Free forever',
-                    features: const [
-                      'Mix 2 audio tracks',
-                      'Basic sound library',
-                      '3 saved sessions',
-                      'Standard quality',
-                      'Ads supported',
-                    ],
-                    featured: false,
-                    outlinedButton: true,
-                    buttonLabel: 'Current Plan',
-                    trialNote: null,
-                    busy: _busy,
-                    onTap: () => setState(() => _selected = _PaywallPlan.free),
-                    onAction: () => _subscribePlan(_PaywallPlan.free),
-                  ),
-                  const SizedBox(height: 14),
-                  // Plus → standard (featured)
-                  _PlanCard(
-                    iconGlyph: PaywallPlusGlyph(
-                        color: SaGlass.of(context).cyan, width: 32),
-                    name: 'Plus',
-                    nameColor: null,
-                    sub: '15 hours listening time per month',
-                    subColorIsCyan: true,
-                    price: yearly ? '£3.33' : '£4.99',
-                    priceColorIsCyan: true,
-                    priceNote: yearly ? 'per month, billed yearly' : 'per month',
-                    features: const [
-                      'All Basic features',
-                      'Access to Theme Tunes',
-                      'Premium sound library',
-                      'Unlimited saved sessions',
-                      'Sleep timer & fade out',
-                      'Ad-free experience',
-                    ],
-                    featured: true,
-                    badge: 'MOST POPULAR',
-                    outlinedButton: false,
-                    buttonLabel: 'Start Free Trial',
-                    trialNote: '7 days free, cancel anytime',
-                    busy: _busy,
-                    onTap: () =>
-                        setState(() => _selected = _PaywallPlan.standard),
-                    onAction: () => _subscribePlan(_PaywallPlan.standard),
-                  ),
-                  const SizedBox(height: 14),
-                  // Pro → pro
-                  _PlanCard(
-                    iconGlyph: const PaywallProGlyph(width: 32),
-                    name: 'Pro',
-                    nameColorIsCyan: true,
-                    sub: 'Unlimited listening time',
-                    subColorIsCyan: true,
-                    price: yearly ? '£4.66' : '£6.99',
-                    priceColorIsCyan: true,
-                    priceNote: yearly ? 'per month, billed yearly' : 'per month',
-                    features: const [
-                      'All Plus features',
-                      'Unlimited Theme Tunes',
-                      'All premium sound packs',
-                      'AI SmartBlend™',
-                      'Advanced mix settings',
-                      'Offline listening',
-                      'Cloud sync across devices',
-                      'Priority support',
-                    ],
-                    featured: false,
-                    outlinedButton: false,
-                    buttonLabel: 'Start Free Trial',
-                    trialNote: '7 days free, cancel anytime',
-                    busy: _busy,
-                    onTap: () => setState(() => _selected = _PaywallPlan.pro),
-                    onAction: () => _subscribePlan(_PaywallPlan.pro),
-                  ),
-                  const SizedBox(height: 18),
-                  const _AllPlansFooter(),
-                  const SizedBox(height: 10),
-                  _RestoreRow(busy: _busy, onRestore: _restore),
-                  const SaLegalFooter(),
-                ],
-              ),
-            ),
-          ],
-        ),
+      header: SaBackHeader(
+        title: 'Membership',
+        onBack: () => context.pop(),
+      ),
+      child: ListView(
+        clipBehavior: Clip.none,
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+        children: [
+          const _PaywallHero(),
+          const SizedBox(height: 18),
+          _BillingTabs(
+            period: _period,
+            onChanged: (p) => setState(() => _period = p),
+          ),
+          const SizedBox(height: 18),
+          // Basic → free
+          _PlanCard(
+            iconGlyph: PaywallBasicGlyph(
+                color: SaGlass.of(context).cyan, width: 22),
+            name: 'Basic',
+            nameColor: null, // textPrimary
+            sub: '2 hours listening time per month',
+            subColor: null, // textMuted
+            price: '£0.00',
+            priceColor: null, // textPrimary
+            priceNote: 'Free forever',
+            features: const [
+              'Mix 2 audio tracks',
+              'Basic sound library',
+              '3 saved sessions',
+              'Standard quality',
+              'Ads supported',
+            ],
+            featured: false,
+            outlinedButton: true,
+            buttonLabel: 'Current Plan',
+            trialNote: null,
+            busy: _busy,
+            onTap: () => setState(() => _selected = _PaywallPlan.free),
+            onAction: () => _subscribePlan(_PaywallPlan.free),
+          ),
+          const SizedBox(height: 14),
+          // Plus → standard (featured)
+          _PlanCard(
+            iconGlyph: PaywallPlusGlyph(
+                color: SaGlass.of(context).cyan, width: 32),
+            name: 'Plus',
+            nameColor: null,
+            sub: '15 hours listening time per month',
+            subColorIsCyan: true,
+            price: yearly ? '£3.33' : '£4.99',
+            priceColorIsCyan: true,
+            priceNote: yearly ? 'per month, billed yearly' : 'per month',
+            features: const [
+              'All Basic features',
+              'Access to Theme Tunes',
+              'Premium sound library',
+              'Unlimited saved sessions',
+              'Sleep timer & fade out',
+              'Ad-free experience',
+            ],
+            featured: true,
+            badge: 'MOST POPULAR',
+            outlinedButton: false,
+            buttonLabel: 'Start Free Trial',
+            trialNote: '7 days free, cancel anytime',
+            busy: _busy,
+            onTap: () =>
+                setState(() => _selected = _PaywallPlan.standard),
+            onAction: () => _subscribePlan(_PaywallPlan.standard),
+          ),
+          const SizedBox(height: 14),
+          // Pro → pro
+          _PlanCard(
+            iconGlyph: const PaywallProGlyph(width: 32),
+            name: 'Pro',
+            nameColorIsCyan: true,
+            sub: 'Unlimited listening time',
+            subColorIsCyan: true,
+            price: yearly ? '£4.66' : '£6.99',
+            priceColorIsCyan: true,
+            priceNote: yearly ? 'per month, billed yearly' : 'per month',
+            features: const [
+              'All Plus features',
+              'Unlimited Theme Tunes',
+              'All premium sound packs',
+              'AI SmartBlend™',
+              'Advanced mix settings',
+              'Offline listening',
+              'Cloud sync across devices',
+              'Priority support',
+            ],
+            featured: false,
+            outlinedButton: false,
+            buttonLabel: 'Start Free Trial',
+            trialNote: '7 days free, cancel anytime',
+            busy: _busy,
+            onTap: () => setState(() => _selected = _PaywallPlan.pro),
+            onAction: () => _subscribePlan(_PaywallPlan.pro),
+          ),
+          const SizedBox(height: 18),
+          const _AllPlansFooter(),
+          const SizedBox(height: 10),
+          _RestoreRow(busy: _busy, onRestore: _restore),
+          const SaLegalFooter(),
+        ],
       ),
     );
   }

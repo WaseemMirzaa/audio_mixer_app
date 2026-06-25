@@ -6,4 +6,5 @@ abstract final class PrefsKeys {
   static const simulateSyncFail = 'dev_simulate_sync_fail_v1';
   static const demoPersona = 'demo_persona_v1'; // guest | demo | pro
   static const lastBackupMs = 'last_backup_ms_v1';
+  static const themeMode = 'theme_mode_v1';
 }

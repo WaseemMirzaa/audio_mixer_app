@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../data/local/prefs_keys.dart';
 import '../../core/bootstrap/bootstrap.dart';
 import '../../core/config/backend.dart';
 import '../../services/mixer_audio_handler.dart';
@@ -90,7 +91,37 @@ final mixerUiProvider = StateProvider<MixerUiState>(
 
 final mixerReadyProvider = StateProvider<bool>((ref) => false);
 
-final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.light);
+final themeModeProvider =
+    NotifierProvider<ThemeModeNotifier, ThemeMode>(ThemeModeNotifier.new);
+
+class ThemeModeNotifier extends Notifier<ThemeMode> {
+  @override
+  ThemeMode build() => _load(ref.read(prefsProvider));
+
+  Future<void> setThemeMode(ThemeMode mode) async {
+    if (state == mode) return;
+    await ref.read(prefsProvider).setString(
+          PrefsKeys.themeMode,
+          _encode(mode),
+        );
+    state = mode;
+  }
+
+  static ThemeMode _load(SharedPreferences prefs) {
+    return switch (prefs.getString(PrefsKeys.themeMode)) {
+      'dark' => ThemeMode.dark,
+      'light' => ThemeMode.light,
+      'system' => ThemeMode.system,
+      _ => ThemeMode.light,
+    };
+  }
+
+  static String _encode(ThemeMode mode) => switch (mode) {
+        ThemeMode.dark => 'dark',
+        ThemeMode.light => 'light',
+        ThemeMode.system => 'system',
+      };
+}
 
 /// Increment to force [sessionsProvider] to refetch (e.g. after save on mixer).
 final sessionsRevisionProvider = StateProvider<int>((ref) => 0);

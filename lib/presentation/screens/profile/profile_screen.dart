@@ -70,8 +70,9 @@ class ProfileScreen extends ConsumerWidget {
                         onReplayOnboarding: () =>
                             context.push('/onboarding?replay=1'),
                         onThemeChanged: (dark) {
-                          ref.read(themeModeProvider.notifier).state =
-                              dark ? ThemeMode.dark : ThemeMode.light;
+                          ref.read(themeModeProvider.notifier).setThemeMode(
+                                dark ? ThemeMode.dark : ThemeMode.light,
+                              );
                         },
                       ),
                       const SizedBox(height: 16),
