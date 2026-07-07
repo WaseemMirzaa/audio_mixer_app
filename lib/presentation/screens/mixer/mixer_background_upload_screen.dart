@@ -28,9 +28,9 @@ class _MixerBackgroundUploadScreenState
   String? _error;
   TrackRef? _foreground;
   TrackRef? _background;
-  // Initial mix levels carried into the player (mockup defaults: 80% / 30%).
-  double _fgVolume = 0.8;
-  double _bgVolume = 0.3;
+  // Initial mix levels carried into the player.
+  double _fgVolume = MixerDefaults.fgVolume;
+  double _bgVolume = MixerDefaults.bgVolume;
   @override
   void initState() {
     super.initState();
@@ -39,7 +39,7 @@ class _MixerBackgroundUploadScreenState
       if (!mounted) return;
       ref.read(mixerDraftProvider.notifier).state = null;
       ref.read(mixerReadyProvider.notifier).state = false;
-      ref.read(mixerUiProvider.notifier).state = const MixerUiState();
+      ref.read(mixerUiProvider.notifier).state = MixerUiState();
     });
   }
 
@@ -134,7 +134,7 @@ class _MixerBackgroundUploadScreenState
       fgVolume: _fgVolume,
       bgVolume: _bgVolume,
     );
-    ref.read(mixerUiProvider.notifier).state = ref.read(mixerUiProvider).copyWith(
+    ref.read(mixerUiProvider.notifier).state = MixerUiState(
           durationMs: duration,
           fgVolume: _fgVolume,
           bgVolume: _bgVolume,

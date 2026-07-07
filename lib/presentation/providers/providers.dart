@@ -86,7 +86,7 @@ final mixerDraftProvider = StateProvider<MixerDraft?>((ref) => null);
 final mixerLaunchArgsProvider = StateProvider<MixerLaunchArgs?>((ref) => null);
 
 final mixerUiProvider = StateProvider<MixerUiState>(
-  (ref) => const MixerUiState(),
+  (ref) => MixerUiState(),
 );
 
 final mixerReadyProvider = StateProvider<bool>((ref) => false);
@@ -136,9 +136,13 @@ final sessionsProvider = FutureProvider<List<MixSession>>((ref) async {
 });
 
 /// Call after any local session list mutation so Home + Sessions stay in sync.
-void refreshSessionsList(WidgetRef ref) {
+/// Pass [sessionId] to refresh an open session-detail screen immediately.
+void refreshSessionsList(WidgetRef ref, {String? sessionId}) {
   ref.read(sessionsRevisionProvider.notifier).state++;
   ref.invalidate(sessionsProvider);
+  if (sessionId != null) {
+    ref.invalidate(sessionDetailProvider(sessionId));
+  }
 }
 
 /// Streams the live playing state from the audio handler.
@@ -155,7 +159,7 @@ final isPlayingProvider = StreamProvider<bool>((ref) {
 /// One session by id (local store). Do not pass [Future] from `build` into [FutureBuilder].
 final sessionDetailProvider =
     FutureProvider.autoDispose.family<MixSession?, String>((ref, sessionId) {
-  return ref.watch(sessionRepositoryProvider).getSession(sessionId);
+  return ref.read(sessionRepositoryProvider).getSession(sessionId);
 });
 
 final presetsProvider = FutureProvider<List<MixerPreset>>((ref) async {

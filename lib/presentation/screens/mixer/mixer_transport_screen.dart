@@ -234,6 +234,42 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
         );
   }
 
+  static const _outputBoostThreshold = 0.95;
+
+  bool _isOutputLow(MixerUiState ui) {
+    return ui.isPlaying &&
+        !ui.fgMuted &&
+        (ui.fgVolume < _outputBoostThreshold ||
+            ui.masterGain < _outputBoostThreshold);
+  }
+
+  void _boostOutput() {
+    final ui = ref.read(mixerUiProvider);
+    final next = ui.copyWith(
+      fgVolume: 1.0,
+      masterGain: 1.0,
+      fgLoudness: ui.fgLoudness < MixerDefaults.fgLoudness
+          ? MixerDefaults.fgLoudness
+          : ui.fgLoudness,
+      fgBassBoost: ui.fgBassBoost < MixerDefaults.fgBassBoost
+          ? MixerDefaults.fgBassBoost
+          : ui.fgBassBoost,
+    );
+    _setUi(next);
+    _pushVolumes();
+    _handler.applyFgLoudness(next.fgLoudness);
+    _handler.applyFgBassBoost(next.fgBassBoost);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Output boosted: 100% foreground & master, plus recommended loudness',
+        ),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
   // ── EQ ──────────────────────────────────────────────────────────────────────
 
   // ── Per-track EQ + effects (driven by the FG/BG selector) ───────────────────
@@ -362,8 +398,8 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
     // Update the draft with the confirmed session ID so re-saves update in place.
     ref.read(mixerDraftProvider.notifier).state =
         draft.copyWith(sessionId: sid);
-    // Refresh sessions list on Home and History.
-    refreshSessionsList(ref);
+    // Refresh sessions list on Home and History, and any open session detail.
+    refreshSessionsList(ref, sessionId: sid);
     if (!mounted) return false;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Session saved')),
@@ -1668,6 +1704,8 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
 
   Widget _masterCard(MixerUiState ui) {
     final g = ui.masterGain.clamp(0.0, 1.0);
+    final showBoost = ui.fgVolume < _outputBoostThreshold ||
+        ui.masterGain < _outputBoostThreshold;
     return _ceramicSection(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1710,7 +1748,68 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
               ),
             ],
           ),
+          if (showBoost) ...[
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: _boostOutput,
+                icon: Icon(Icons.volume_up_rounded, size: 18, color: _glass.accent),
+                label: Text(
+                  'Boost output',
+                  style: TextStyle(
+                    color: _glass.accent,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _outputLowHint(MixerUiState ui) {
+    if (!_isOutputLow(ui)) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+        decoration: BoxDecoration(
+          color: _glass.glassBottom,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _glass.glassBorder),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.info_outline_rounded, size: 20, color: _glass.accent),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Output may sound quiet. Raise Foreground and Master to 100%, '
+                'or turn up your phone\'s media volume.',
+                style: TextStyle(
+                  color: _glass.textMuted,
+                  fontSize: 12.5,
+                  height: 1.35,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: _boostOutput,
+              child: Text(
+                'Boost',
+                style: TextStyle(
+                  color: _glass.accent,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1948,6 +2047,7 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
         _trackTitleInfo('with ${draft.background!.displayName}'),
         const SizedBox(height: 12),
         _playbackCard(progress, ui),
+        _outputLowHint(ui),
         const SizedBox(height: 14),
         _ambientBar(ui, draft.background!.displayName),
       ],

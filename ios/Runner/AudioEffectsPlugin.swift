@@ -44,7 +44,7 @@ private class TrackEngine {
             lowShelf.bypass = false
         }
 
-        reverbNode.loadFactoryPreset(.mediumHall)
+        reverbNode.loadFactoryPreset(.largeHall2)
         reverbNode.wetDryMix = 0
         trackMixer.outputVolume = 1.0
     }
@@ -327,7 +327,9 @@ class AudioEffectsPlugin: NSObject, FlutterPlugin {
     private func setEqBands(trackId: String, levels: [Double], result: FlutterResult) {
         guard let track = tracks[trackId] else { result(nil); return }
         for (i, band) in track.eqNode.bands.enumerated() where i < levels.count {
-            band.gain = Float(levels[i]).clamped(to: -12...12)
+            // Slightly stronger mapping — iOS parametric EQ can sound subtle on device.
+            let boosted = Float(levels[i]) * 1.2
+            band.gain = boosted.clamped(to: -12...12)
         }
         result(nil)
     }
@@ -335,14 +337,16 @@ class AudioEffectsPlugin: NSObject, FlutterPlugin {
     private func setBassBoost(trackId: String, strength: Double, result: FlutterResult) {
         guard let track = tracks[trackId] else { result(nil); return }
         if let lowShelf = track.bassNode.bands.first {
-            lowShelf.gain = (Float(strength) * 12.0).clamped(to: 0...12)
+            let curved = pow(Float(strength.clamped(to: 0...1)), 0.55)
+            lowShelf.gain = (curved * 12.0).clamped(to: 0...12)
         }
         result(nil)
     }
 
     private func setVirtualizer(trackId: String, strength: Double, result: FlutterResult) {
         guard let track = tracks[trackId] else { result(nil); return }
-        track.reverbNode.wetDryMix = Float(strength).clamped(to: 0...1) * 40.0
+        let curved = pow(Float(strength.clamped(to: 0...1)), 0.55)
+        track.reverbNode.wetDryMix = (curved * 85.0).clamped(to: 0...100)
         result(nil)
     }
 
@@ -377,6 +381,12 @@ class AudioEffectsPlugin: NSObject, FlutterPlugin {
 
 private extension Float {
     func clamped(to range: ClosedRange<Float>) -> Float {
+        Swift.min(Swift.max(self, range.lowerBound), range.upperBound)
+    }
+}
+
+private extension Double {
+    func clamped(to range: ClosedRange<Double>) -> Double {
         Swift.min(Swift.max(self, range.lowerBound), range.upperBound)
     }
 }

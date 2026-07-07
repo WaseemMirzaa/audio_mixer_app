@@ -22,9 +22,11 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
   String? _loadedBgSource;
   bool _disposed = false;
   bool _iosNativeReady = false;
+  bool _pausedByInterruption = false;
+  bool _interruptionsBound = false;
 
-  double _fgVol = 0.85;
-  double _bgVol = 0.45;
+  double _fgVol = 1.0;
+  double _bgVol = 0.5;
   bool _fgLoop = false;
 
   MixerAudioHandler() {
@@ -37,6 +39,32 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
         _handleCompletion();
       }
       _broadcastState();
+    });
+    _initAudioSession();
+  }
+
+  Future<void> _initAudioSession() async {
+    final session = await AudioSession.instance;
+    await session.configure(const AudioSessionConfiguration.music());
+    if (_interruptionsBound || _disposed) return;
+    _interruptionsBound = true;
+    session.interruptionEventStream.listen((event) {
+      if (_disposed) return;
+      if (event.begin) {
+        // Only mark for auto-resume if we were actually playing when the call
+        // started — not if the user had already paused.
+        if (_fg.playing) {
+          _pausedByInterruption = true;
+          _pauseBoth();
+        }
+      } else if (_pausedByInterruption &&
+          (event.type == AudioInterruptionType.pause ||
+              event.type == AudioInterruptionType.duck)) {
+        _pausedByInterruption = false;
+        _playBoth();
+      } else {
+        _pausedByInterruption = false;
+      }
     });
   }
 
@@ -64,29 +92,7 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
         _loadedFgSource == fgSource && _loadedBgSource == bgSource;
     if (alreadyLoaded) return;
 
-    final session = await AudioSession.instance;
-    await session.configure(const AudioSessionConfiguration.music());
-
-    session.interruptionEventStream.listen((event) {
-      if (_disposed) return;
-      if (event.begin) {
-        _fg.pause();
-        _bg.pause();
-        if (Platform.isIOS && _iosNativeReady) {
-          AudioEffectsChannel.pauseTrack(trackId: 'fg');
-          AudioEffectsChannel.pauseTrack(trackId: 'bg');
-        }
-      } else if (event.type == AudioInterruptionType.pause ||
-          event.type == AudioInterruptionType.duck) {
-        _fg.play();
-        _bg.play();
-        if (Platform.isIOS && _iosNativeReady) {
-          AudioEffectsChannel.playTrack(trackId: 'fg');
-          AudioEffectsChannel.playTrack(trackId: 'bg');
-        }
-      }
-    });
-
+    await _initAudioSession();
     if (Platform.isAndroid) {
       await Future.wait([
         AudioEffectsChannel.closeEffects(trackId: 'fg'),
@@ -130,14 +136,7 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
     ));
 
     if (Platform.isAndroid) {
-      final fgSid = _fg.androidAudioSessionId;
-      final bgSid = _bg.androidAudioSessionId;
-      if (fgSid != null && fgSid != 0) {
-        await AudioEffectsChannel.openEffects(trackId: 'fg', sessionId: fgSid);
-      }
-      if (bgSid != null && bgSid != 0) {
-        await AudioEffectsChannel.openEffects(trackId: 'bg', sessionId: bgSid);
-      }
+      await _openAndroidEffects();
     } else if (Platform.isIOS) {
       final fgBands = await AudioEffectsChannel.openEffects(
         trackId: 'fg',
@@ -185,6 +184,23 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
     await Future.wait([_fg.setVolume(_fgVol), _bg.setVolume(_bgVol)]);
   }
 
+  /// Android session IDs can be 0 briefly after setAudioSource — retry attach.
+  Future<void> _openAndroidEffects() async {
+    for (var attempt = 0; attempt < 8; attempt++) {
+      if (_disposed) return;
+      final fgSid = _fg.androidAudioSessionId;
+      final bgSid = _bg.androidAudioSessionId;
+      if (fgSid != null && fgSid != 0) {
+        await AudioEffectsChannel.openEffects(trackId: 'fg', sessionId: fgSid);
+      }
+      if (bgSid != null && bgSid != 0) {
+        await AudioEffectsChannel.openEffects(trackId: 'bg', sessionId: bgSid);
+      }
+      if (fgSid != null && fgSid != 0 && bgSid != null && bgSid != 0) return;
+      await Future.delayed(const Duration(milliseconds: 80));
+    }
+  }
+
   // ── BaseAudioHandler overrides (media session controls) ────────────────────
 
   @override
@@ -206,6 +222,7 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
 
   Future<void> _playBoth() async {
     if (_disposed) return;
+    _pausedByInterruption = false;
     final session = await AudioSession.instance;
     await session.setActive(true);
     // just_audio leaves a completed track at its end and won't restart on
@@ -382,6 +399,7 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
 
   Future<void> disposeHandler() async {
     _disposed = true;
+    _pausedByInterruption = false;
     await Future.wait([
       AudioEffectsChannel.closeEffects(trackId: 'fg'),
       AudioEffectsChannel.closeEffects(trackId: 'bg'),

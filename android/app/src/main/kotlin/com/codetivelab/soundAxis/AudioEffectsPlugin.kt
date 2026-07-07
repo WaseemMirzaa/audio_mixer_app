@@ -6,6 +6,8 @@ import android.media.audiofx.LoudnessEnhancer
 import android.media.audiofx.Virtualizer
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import kotlin.math.abs
+import kotlin.math.pow
 
 /**
  * Manages per-track Android AudioEffect instances (Equalizer, BassBoost,
@@ -25,6 +27,13 @@ class AudioEffectsPlugin : MethodChannel.MethodCallHandler {
     )
 
     private val effects = mutableMapOf<String, TrackEffects>()
+
+    // UI band labels (Hz) — map to nearest device EQ center frequency.
+    private val targetEqHz = intArrayOf(60, 230, 910, 3600, 14000)
+
+    /// Perceptual curve: mid-slider values feel stronger on OEM effect APIs.
+    private fun curvedStrength(strength: Double): Short =
+        (strength.coerceIn(0.0, 1.0).pow(0.55) * 1000.0).toInt().toShort()
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         val trackId = call.argument<String>("trackId")
@@ -101,13 +110,24 @@ class AudioEffectsPlugin : MethodChannel.MethodCallHandler {
         val eq = effects[trackId]?.eq ?: run { result.success(null); return }
         try {
             val bandCount = eq.numberOfBands.toInt()
-            for (i in 0 until minOf(levels.size, bandCount)) {
+            val min = eq.bandLevelRange[0]
+            val max = eq.bandLevelRange[1]
+            for (i in levels.indices) {
+                if (i >= targetEqHz.size) break
+                val targetHz = targetEqHz[i]
+                var bestBand = 0
+                var bestDist = Long.MAX_VALUE
+                for (b in 0 until bandCount) {
+                    val center = eq.getCenterFreq(b.toShort()).toLong()
+                    val dist = abs(center - targetHz)
+                    if (dist < bestDist) {
+                        bestDist = dist
+                        bestBand = b
+                    }
+                }
                 // levels are in dB; Android Equalizer uses millibels.
-                val mb = (levels[i] * 100.0).toInt().toShort()
-                // Clamp to device's reported min/max millibel range.
-                val min = eq.bandLevelRange[0]
-                val max = eq.bandLevelRange[1]
-                eq.setBandLevel(i.toShort(), mb.coerceIn(min, max))
+                val mb = (levels[i] * 1.15 * 100.0).toInt().toShort()
+                eq.setBandLevel(bestBand.toShort(), mb.coerceIn(min, max))
             }
             result.success(null)
         } catch (e: Exception) {
@@ -120,9 +140,7 @@ class AudioEffectsPlugin : MethodChannel.MethodCallHandler {
     private fun setBassBoost(trackId: String, strength: Double, result: MethodChannel.Result) {
         val bb = effects[trackId]?.bassBoost ?: run { result.success(null); return }
         try {
-            // BassBoost strength: 0–1000 (short)
-            val s = (strength.coerceIn(0.0, 1.0) * 1000.0).toInt().toShort()
-            bb.setStrength(s)
+            bb.setStrength(curvedStrength(strength))
             result.success(null)
         } catch (e: Exception) {
             result.error("SET_BASS_FAILED", e.message, null)
@@ -134,9 +152,7 @@ class AudioEffectsPlugin : MethodChannel.MethodCallHandler {
     private fun setVirtualizer(trackId: String, strength: Double, result: MethodChannel.Result) {
         val virt = effects[trackId]?.virtualizer ?: run { result.success(null); return }
         try {
-            // Virtualizer strength: 0–1000 (short)
-            val s = (strength.coerceIn(0.0, 1.0) * 1000.0).toInt().toShort()
-            virt.setStrength(s)
+            virt.setStrength(curvedStrength(strength))
             result.success(null)
         } catch (e: Exception) {
             result.error("SET_VIRT_FAILED", e.message, null)

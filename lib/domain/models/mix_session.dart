@@ -1,5 +1,7 @@
+import 'mixer_state.dart';
+
 class MixSession {
-  const MixSession({
+  MixSession({
     required this.sessionId,
     required this.uid,
     required this.title,
@@ -22,16 +24,23 @@ class MixSession {
     this.syncStatus = 'local',
     this.foregroundPath,
     this.backgroundPath,
-    // Audio effects (defaults to 0 for backward-compat with old saved sessions)
-    this.foregroundBassBoost = 0.0,
-    this.backgroundBassBoost = 0.0,
-    this.foregroundVirtualizer = 0.0,
-    this.backgroundVirtualizer = 0.0,
-    this.foregroundLoudness = 0.0,
-    this.backgroundLoudness = 0.0,
-    this.playbackSpeed = 1.0,
+    double? foregroundBassBoost,
+    double? backgroundBassBoost,
+    double? foregroundVirtualizer,
+    double? backgroundVirtualizer,
+    double? foregroundLoudness,
+    double? backgroundLoudness,
+    double? playbackSpeed,
     this.isFavorite = false,
-  });
+  })  : foregroundBassBoost = foregroundBassBoost ?? MixerDefaults.fgBassBoost,
+        backgroundBassBoost = backgroundBassBoost ?? MixerDefaults.bgBassBoost,
+        foregroundVirtualizer =
+            foregroundVirtualizer ?? MixerDefaults.fgVirtualizer,
+        backgroundVirtualizer =
+            backgroundVirtualizer ?? MixerDefaults.bgVirtualizer,
+        foregroundLoudness = foregroundLoudness ?? MixerDefaults.fgLoudness,
+        backgroundLoudness = backgroundLoudness ?? MixerDefaults.bgLoudness,
+        playbackSpeed = playbackSpeed ?? MixerDefaults.playbackSpeed;
 
   final String sessionId;
   final String uid;
@@ -169,11 +178,12 @@ class MixSession {
       };
 
   factory MixSession.fromJson(Map<String, dynamic> m) {
-    List<double> eq(dynamic v) =>
-        (v as List?)?.map((e) => (e as num).toDouble()).toList() ??
-        List<double>.filled(5, 0);
-    double d(String k, [double def = 0.0]) =>
-        (m[k] as num?)?.toDouble() ?? def;
+    List<double> eq(dynamic v, List<double> defaults) {
+      if (v == null) return List<double>.from(defaults);
+      return (v as List).map((e) => (e as num).toDouble()).toList();
+    }
+
+    double d(String k, double def) => (m[k] as num?)?.toDouble() ?? def;
 
     return MixSession(
       sessionId: m['sessionId'] as String,
@@ -183,12 +193,12 @@ class MixSession {
       backgroundAudioId: m['backgroundAudioId'] as String,
       foregroundDisplayName: m['foregroundDisplayName'] as String,
       backgroundDisplayName: m['backgroundDisplayName'] as String,
-      foregroundVolume: d('foregroundVolume', 0.85),
-      backgroundVolume: d('backgroundVolume', 0.45),
-      foregroundEq: eq(m['foregroundEq']),
-      backgroundEq: eq(m['backgroundEq']),
+      foregroundVolume: d('foregroundVolume', MixerDefaults.fgVolume),
+      backgroundVolume: d('backgroundVolume', MixerDefaults.bgVolume),
+      foregroundEq: eq(m['foregroundEq'], MixerDefaults.fgEq),
+      backgroundEq: eq(m['backgroundEq'], MixerDefaults.bgEq),
       masterGain: d('masterGain', 1.0),
-      balance: d('balance'),
+      balance: d('balance', 0.0),
       durationMs: (m['durationMs'] as num?)?.toInt() ?? 0,
       playbackPositionMs: (m['playbackPositionMs'] as num?)?.toInt() ?? 0,
       createdAtMs: (m['createdAtMs'] as num).toInt(),
@@ -198,13 +208,15 @@ class MixSession {
       syncStatus: m['syncStatus'] as String? ?? 'local',
       foregroundPath: m['foregroundPath'] as String?,
       backgroundPath: m['backgroundPath'] as String?,
-      foregroundBassBoost: d('foregroundBassBoost'),
-      backgroundBassBoost: d('backgroundBassBoost'),
-      foregroundVirtualizer: d('foregroundVirtualizer'),
-      backgroundVirtualizer: d('backgroundVirtualizer'),
-      foregroundLoudness: d('foregroundLoudness'),
-      backgroundLoudness: d('backgroundLoudness'),
-      playbackSpeed: d('playbackSpeed', 1.0),
+      foregroundBassBoost: d('foregroundBassBoost', MixerDefaults.fgBassBoost),
+      backgroundBassBoost: d('backgroundBassBoost', MixerDefaults.bgBassBoost),
+      foregroundVirtualizer:
+          d('foregroundVirtualizer', MixerDefaults.fgVirtualizer),
+      backgroundVirtualizer:
+          d('backgroundVirtualizer', MixerDefaults.bgVirtualizer),
+      foregroundLoudness: d('foregroundLoudness', MixerDefaults.fgLoudness),
+      backgroundLoudness: d('backgroundLoudness', MixerDefaults.bgLoudness),
+      playbackSpeed: d('playbackSpeed', MixerDefaults.playbackSpeed),
       isFavorite: m['isFavorite'] as bool? ?? false,
     );
   }

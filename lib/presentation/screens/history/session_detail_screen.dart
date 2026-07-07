@@ -307,16 +307,16 @@ class _SessionDetailBody extends ConsumerWidget {
           icon: Icons.copy_rounded,
           onPressed: () async {
             final repo = ref.read(sessionRepositoryProvider);
-            final copy = s.copyWith(
+            final latest = await repo.getSession(s.sessionId) ?? s;
+            final copy = latest.copyWith(
               sessionId: '',
-              title: '${s.title} copy',
+              title: '${latest.title} copy',
               createdAtMs: DateTime.now().millisecondsSinceEpoch,
               updatedAtMs: DateTime.now().millisecondsSinceEpoch,
               isFavorite: false,
             );
             await repo.upsertSession(copy);
-            ref.invalidate(sessionsProvider);
-            ref.invalidate(sessionDetailProvider(s.sessionId));
+            refreshSessionsList(ref, sessionId: s.sessionId);
             if (!context.mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Duplicated session')),
@@ -405,8 +405,7 @@ class _SessionDetailBody extends ConsumerWidget {
                 await ref
                     .read(sessionRepositoryProvider)
                     .deleteSession(s.sessionId);
-                ref.invalidate(sessionsProvider);
-                ref.invalidate(sessionDetailProvider(s.sessionId));
+                refreshSessionsList(ref, sessionId: s.sessionId);
                 if (!context.mounted) return;
                 context.pop();
               }

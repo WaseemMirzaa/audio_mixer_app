@@ -263,7 +263,7 @@ class _SessionListTile extends ConsumerWidget {
     await ref
         .read(sessionRepositoryProvider)
         .upsertSession(session.copyWith(isFavorite: !session.isFavorite));
-    ref.invalidate(sessionsProvider);
+    refreshSessionsList(ref, sessionId: session.sessionId);
   }
 
   void _showOptions(BuildContext context, WidgetRef ref) {

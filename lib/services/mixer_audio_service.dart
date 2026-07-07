@@ -26,10 +26,12 @@ class MixerAudioService {
   String? _loadedFgSource;
   String? _loadedBgSource;
   bool _disposed = false;
+  bool _pausedByInterruption = false;
+  bool _interruptionsBound = false;
 
   // Cached volumes for iOS engine sync.
-  double _fgVol = 0.85;
-  double _bgVol = 0.45;
+  double _fgVol = 1.0;
+  double _bgVol = 0.5;
 
   // Android audio session IDs.
   int? _fgSessionId;
@@ -58,29 +60,7 @@ class MixerAudioService {
     if (alreadyLoaded) return;
 
     // Configure audio session for media playback (focus, interruptions, etc.)
-    final session = await AudioSession.instance;
-    await session.configure(const AudioSessionConfiguration.music());
-
-    session.interruptionEventStream.listen((event) {
-      if (_disposed) return;
-      if (event.begin) {
-        _fg.pause();
-        _bg.pause();
-        if (Platform.isIOS) {
-          AudioEffectsChannel.pauseTrack(trackId: 'fg');
-          AudioEffectsChannel.pauseTrack(trackId: 'bg');
-        }
-      } else if (event.type == AudioInterruptionType.pause ||
-          event.type == AudioInterruptionType.duck) {
-        _fg.play();
-        _bg.play();
-        if (Platform.isIOS) {
-          AudioEffectsChannel.playTrack(trackId: 'fg');
-          AudioEffectsChannel.playTrack(trackId: 'bg');
-        }
-      }
-    });
-
+    await _initAudioSession();
     // Close existing native effects before reloading.
     await Future.wait([
       AudioEffectsChannel.closeEffects(trackId: 'fg'),
@@ -146,6 +126,7 @@ class MixerAudioService {
 
   Future<void> play() async {
     if (_disposed) return;
+    _pausedByInterruption = false;
     await Future.wait([_fg.play(), _bg.play()]);
     if (Platform.isIOS) {
       await Future.wait([
@@ -269,6 +250,29 @@ class MixerAudioService {
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
+
+  Future<void> _initAudioSession() async {
+    final session = await AudioSession.instance;
+    await session.configure(const AudioSessionConfiguration.music());
+    if (_interruptionsBound || _disposed) return;
+    _interruptionsBound = true;
+    session.interruptionEventStream.listen((event) {
+      if (_disposed) return;
+      if (event.begin) {
+        if (_fg.playing) {
+          _pausedByInterruption = true;
+          pause();
+        }
+      } else if (_pausedByInterruption &&
+          (event.type == AudioInterruptionType.pause ||
+              event.type == AudioInterruptionType.duck)) {
+        _pausedByInterruption = false;
+        play();
+      } else {
+        _pausedByInterruption = false;
+      }
+    });
+  }
 
   static Uri _toUri(String source) {
     if (source.startsWith('http://') || source.startsWith('https://')) {
