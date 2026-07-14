@@ -9,19 +9,24 @@ abstract final class MixerDefaults {
   static const _eqMaxDb = 12.0;
   static const _loudnessMaxDb = 12.0;
 
-  /// Speech-forward EQ lift (60 Hz – 14 kHz).
-  static const _baseFgEq = [2.0, 2.5, 3.0, 2.5, 2.0];
-  static const _baseBgEq = [1.0, 1.5, 2.0, 1.5, 1.0];
+  // Maximum-loudness defaults: every gain lever is pushed to (or near) its
+  // ceiling so first-time playback is as loud as the pipeline allows on both
+  // tracks. Strong broadband EQ lift (+8 dB across 60 Hz – 14 kHz) stacks on
+  // top of the full LoudnessEnhancer gain for the hottest clean output.
+  static const _baseFgEq = [8.0, 8.0, 8.0, 8.0, 8.0];
+  static const _baseBgEq = [8.0, 8.0, 8.0, 8.0, 8.0];
 
-  static const _baseFgBassBoost = 0.8;
-  static const _baseBgBassBoost = 0.8;
+  static const _baseFgBassBoost = 1.0;
+  static const _baseBgBassBoost = 1.0;
   static const _baseFgVirtualizer = 0.5;
   static const _baseBgVirtualizer = 0.55;
-  static const _baseFgLoudness = 9.6;
-  static const _baseBgLoudness = 9.6;
+  // LoudnessEnhancer at its 12 dB ceiling on both tracks.
+  static const _baseFgLoudness = 12.0;
+  static const _baseBgLoudness = 12.0;
 
+  // Both track volumes at unity (1.0) — the maximum just_audio allows.
   static const fgVolume = 1.0;
-  static const _baseBgVolume = 0.5;
+  static const _baseBgVolume = 1.0;
   static const playbackSpeed = 1.0;
 
   static bool get _ios => Platform.isIOS;
