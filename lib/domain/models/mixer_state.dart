@@ -17,11 +17,15 @@ abstract final class MixerDefaults {
   static const _baseBgBassBoost = 0.8;
   static const _baseFgVirtualizer = 0.5;
   static const _baseBgVirtualizer = 0.55;
-  static const _baseFgLoudness = 9.6;
-  static const _baseBgLoudness = 9.6;
+  // Push perceptual gain to the ceiling by default so first-time playback is
+  // full and clear on both tracks (previously left 2.4 dB of headroom unused).
+  static const _baseFgLoudness = 12.0;
+  static const _baseBgLoudness = 12.0;
 
   static const fgVolume = 1.0;
-  static const _baseBgVolume = 0.5;
+  // Background sat at half amplitude (~-6 dB) under the voice by default, which
+  // read as too quiet out of the box — lift it so the ambience is audible.
+  static const _baseBgVolume = 0.75;
   static const playbackSpeed = 1.0;
 
   static bool get _ios => Platform.isIOS;
