@@ -18,8 +18,9 @@ abstract final class MixerDefaults {
 
   static const _baseFgBassBoost = 1.0;
   static const _baseBgBassBoost = 1.0;
-  static const _baseFgVirtualizer = 0.5;
-  static const _baseBgVirtualizer = 0.55;
+  // 3D virtualizer (spatial widening) off by default on both tracks.
+  static const _baseFgVirtualizer = 0.0;
+  static const _baseBgVirtualizer = 0.0;
   // LoudnessEnhancer at its 12 dB ceiling on both tracks.
   static const _baseFgLoudness = 12.0;
   static const _baseBgLoudness = 12.0;
