@@ -142,6 +142,54 @@ class AudioEffectsPlugin: NSObject, FlutterPlugin {
 
     private let engine = AVAudioEngine()
     private var tracks: [String: TrackEngine] = [:]
+    private var interruptionObserver: NSObjectProtocol?
+
+    override init() {
+        super.init()
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] notification in
+            self?.handleSessionInterruption(notification)
+        }
+    }
+
+    deinit {
+        if let interruptionObserver {
+            NotificationCenter.default.removeObserver(interruptionObserver)
+        }
+    }
+
+    private func handleSessionInterruption(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let typeRaw = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: typeRaw) else { return }
+        switch type {
+        case .began:
+            for track in tracks.values {
+                pauseTrackSilently(track)
+            }
+        case .ended:
+            // Dart owns resume after camera/calls — never auto-play here.
+            break
+        @unknown default:
+            break
+        }
+    }
+
+    private func pauseTrackSilently(_ track: TrackEngine) {
+        if track.playerNode.isPlaying {
+            if let lastRenderTime = track.playerNode.lastRenderTime,
+               let playerTime = track.playerNode.playerTime(forNodeTime: lastRenderTime),
+               playerTime.sampleTime > 0 {
+                track.seekOffsetFrames += playerTime.sampleTime
+                track.seekOffsetFrames = min(track.seekOffsetFrames, track.durationFrames)
+            }
+            track.playerNode.stop()
+        }
+        track.isRunning = false
+    }
 
     private func makeLoopBuffer(from file: AVAudioFile) throws -> AVAudioPCMBuffer {
         let format = file.processingFormat

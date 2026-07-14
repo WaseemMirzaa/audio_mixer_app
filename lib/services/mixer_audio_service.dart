@@ -28,6 +28,7 @@ class MixerAudioService {
   bool _disposed = false;
   bool _pausedByInterruption = false;
   bool _interruptionsBound = false;
+  bool _userWantsPlayback = false;
 
   // Cached volumes for iOS engine sync.
   double _fgVol = 1.0;
@@ -126,6 +127,7 @@ class MixerAudioService {
 
   Future<void> play() async {
     if (_disposed) return;
+    _userWantsPlayback = true;
     _pausedByInterruption = false;
     await Future.wait([_fg.play(), _bg.play()]);
     if (Platform.isIOS) {
@@ -136,7 +138,11 @@ class MixerAudioService {
     }
   }
 
-  Future<void> pause() async {
+  Future<void> pause({bool userInitiated = true}) async {
+    if (userInitiated) {
+      _userWantsPlayback = false;
+      _pausedByInterruption = false;
+    }
     if (_disposed) return;
     await Future.wait([_fg.pause(), _bg.pause()]);
     if (Platform.isIOS) {
@@ -259,17 +265,21 @@ class MixerAudioService {
     session.interruptionEventStream.listen((event) {
       if (_disposed) return;
       if (event.begin) {
-        if (_fg.playing) {
+        if (_userWantsPlayback) {
           _pausedByInterruption = true;
-          pause();
         }
-      } else if (_pausedByInterruption &&
-          (event.type == AudioInterruptionType.pause ||
-              event.type == AudioInterruptionType.duck)) {
-        _pausedByInterruption = false;
-        play();
+        pause(userInitiated: false);
       } else {
+        final resumeAfterInterruption =
+            _pausedByInterruption && _userWantsPlayback;
         _pausedByInterruption = false;
+        if (resumeAfterInterruption &&
+            (event.type == AudioInterruptionType.pause ||
+                event.type == AudioInterruptionType.duck)) {
+          play();
+        } else if (!_userWantsPlayback) {
+          pause(userInitiated: false);
+        }
       }
     });
   }

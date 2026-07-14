@@ -195,10 +195,11 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
     final ui = ref.read(mixerUiProvider);
     if (ui.isPlaying) {
       svc.pause();
+      _setUi(ui.copyWith(isPlaying: false));
     } else {
       svc.play();
+      _setUi(ui.copyWith(isPlaying: true));
     }
-    _setUi(ui.copyWith(isPlaying: !ui.isPlaying));
   }
 
   void _seekTo(int ms) {

@@ -24,6 +24,8 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
   bool _iosNativeReady = false;
   bool _pausedByInterruption = false;
   bool _interruptionsBound = false;
+  /// True only after an explicit play(); cleared on user pause/stop/completion.
+  bool _userWantsPlayback = false;
 
   double _fgVol = 1.0;
   double _bgVol = 0.5;
@@ -51,19 +53,24 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
     session.interruptionEventStream.listen((event) {
       if (_disposed) return;
       if (event.begin) {
-        // Only mark for auto-resume if we were actually playing when the call
-        // started — not if the user had already paused.
-        if (_fg.playing) {
+        // Remember intent before pausing — camera, calls, and recording all
+        // steal the audio session temporarily.
+        if (_userWantsPlayback) {
           _pausedByInterruption = true;
-          _pauseBoth();
         }
-      } else if (_pausedByInterruption &&
-          (event.type == AudioInterruptionType.pause ||
-              event.type == AudioInterruptionType.duck)) {
-        _pausedByInterruption = false;
-        _playBoth();
+        _pauseBoth(userInitiated: false);
       } else {
+        final resumeAfterInterruption =
+            _pausedByInterruption && _userWantsPlayback;
         _pausedByInterruption = false;
+        if (resumeAfterInterruption &&
+            (event.type == AudioInterruptionType.pause ||
+                event.type == AudioInterruptionType.duck)) {
+          _playBoth();
+        } else if (!_userWantsPlayback) {
+          // just_audio / AVAudioEngine may restart on session regain — stay off.
+          _ensurePaused();
+        }
       }
     });
   }
@@ -207,7 +214,7 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> play() => _playBoth();
 
   @override
-  Future<void> pause() => _pauseBoth();
+  Future<void> pause() => _pauseBoth(userInitiated: true);
 
   @override
   Future<void> seek(Duration position) => _seekFg(position);
@@ -222,6 +229,7 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
 
   Future<void> _playBoth() async {
     if (_disposed) return;
+    _userWantsPlayback = true;
     _pausedByInterruption = false;
     final session = await AudioSession.instance;
     await session.setActive(true);
@@ -245,7 +253,11 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
     }
   }
 
-  Future<void> _pauseBoth() async {
+  Future<void> _pauseBoth({bool userInitiated = true}) async {
+    if (userInitiated) {
+      _userWantsPlayback = false;
+      _pausedByInterruption = false;
+    }
     if (_disposed) return;
     await Future.wait([_fg.pause(), _bg.pause()]);
     if (Platform.isIOS && _iosNativeReady) {
@@ -255,6 +267,8 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
       ]);
     }
   }
+
+  Future<void> _ensurePaused() => _pauseBoth(userInitiated: false);
 
   Future<void> _seekFg(Duration position) async {
     if (_disposed) return;
@@ -285,6 +299,8 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
   /// so the player shows a play button at 0:00 and is ready to replay.
   Future<void> _handleCompletion() async {
     if (_fgLoop) return;
+    _userWantsPlayback = false;
+    _pausedByInterruption = false;
     await Future.wait([_fg.pause(), _bg.pause()]);
     await Future.wait([_fg.seek(Duration.zero), _bg.seek(Duration.zero)]);
     if (Platform.isIOS && _iosNativeReady) {
@@ -400,6 +416,7 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> disposeHandler() async {
     _disposed = true;
     _pausedByInterruption = false;
+    _userWantsPlayback = false;
     await Future.wait([
       AudioEffectsChannel.closeEffects(trackId: 'fg'),
       AudioEffectsChannel.closeEffects(trackId: 'bg'),
@@ -426,7 +443,7 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
         ProcessingState.ready => AudioProcessingState.ready,
         ProcessingState.completed => AudioProcessingState.completed,
       },
-      playing: _fg.playing,
+      playing: _userWantsPlayback && _fg.playing,
       updatePosition: _fg.position,
       bufferedPosition: _fg.bufferedPosition,
       speed: _fg.speed,
