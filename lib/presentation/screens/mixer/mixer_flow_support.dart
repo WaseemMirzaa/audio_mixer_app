@@ -32,16 +32,19 @@ Future<void> bootstrapMixerFlow(
       final bgPath = existing.backgroundPath ?? '';
       final fgExists = fgPath.isNotEmpty && File(fgPath).existsSync();
       final bgExists = bgPath.isNotEmpty && File(bgPath).existsSync();
-      if (fgExists && bgExists) {
+      // Background is required; foreground is optional (background-only session).
+      if (bgExists) {
         nextDraft = MixerDraft(
           sessionId: existing.sessionId,
           title: existing.title,
-          foreground: TrackRef(
-            id: existing.foregroundAudioId,
-            localPath: fgPath,
-            displayName: existing.foregroundDisplayName,
-            durationMs: existing.durationMs,
-          ),
+          foreground: fgExists
+              ? TrackRef(
+                  id: existing.foregroundAudioId,
+                  localPath: fgPath,
+                  displayName: existing.foregroundDisplayName,
+                  durationMs: existing.durationMs,
+                )
+              : null,
           background: TrackRef(
             id: existing.backgroundAudioId,
             localPath: bgPath,
@@ -95,8 +98,8 @@ Future<void> bootstrapMixerFlow(
     );
   }
 
-  if (nextDraft?.foreground != null && nextDraft?.background != null) {
-    final fgMs = nextDraft!.foreground!.durationMs;
+  if (nextDraft?.background != null) {
+    final fgMs = nextDraft!.foreground?.durationMs ?? 0;
     final bgMs = nextDraft.background!.durationMs;
     final longest = fgMs > bgMs ? fgMs : bgMs;
     final dur = longest <= 0 ? nextUi.durationMs : longest;

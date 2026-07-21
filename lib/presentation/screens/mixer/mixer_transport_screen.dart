@@ -85,6 +85,9 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
     // First-time creation (no saved session yet) opens in edit mode;
     // opening/playing an existing session opens in the clean player view.
     _editing = draft?.sessionId == null;
+    // Background-only sessions have no foreground track, so the EQ/effects
+    // cards edit the background layer.
+    if (draft?.foreground == null) _eqBg = true;
     await _loadAudio();
     if (!_alive || !mounted) return;
     setState(() => _loading = false);
@@ -94,15 +97,20 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
 
   Future<void> _loadAudio() async {
     final draft = ref.read(mixerDraftProvider);
-    if (draft?.foreground == null || draft?.background == null) return;
+    // Background is required; foreground is optional (background-only session).
+    if (draft?.background == null) return;
 
     final svc = _handler;
     final ui = ref.read(mixerUiProvider);
 
+    // Configure "play alongside other apps" before loading so the audio session
+    // is in the right mode when playback starts.
+    await svc.setMixWithOthers(ui.mixWithOthers);
+
     await svc.load(
-      fgSource: draft!.foreground!.localPath,
+      fgSource: draft!.foreground?.localPath,
       bgSource: draft.background!.localPath,
-      fgTitle: draft.foreground!.displayName,
+      fgTitle: draft.foreground?.displayName,
       bgTitle: draft.background!.displayName,
       startPositionMs: ui.positionMs,
     );
@@ -220,6 +228,29 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
   void _setSpeed(double speed) {
     _updateUi((ui) => ui.copyWith(playbackSpeed: speed));
     _handler.setSpeed(speed);
+  }
+
+  /// True when there is no foreground track — the background is the sole track.
+  bool get _bgOnly => ref.read(mixerDraftProvider)?.foreground == null;
+
+  /// Toggle "play alongside other apps" (Audible / YouTube / Spotify). This
+  /// reconfigures the audio session so our output mixes with theirs instead of
+  /// interrupting it.
+  void _setMixWithOthers(bool enabled) {
+    _updateUi((ui) => ui.copyWith(mixWithOthers: enabled));
+    _handler.setMixWithOthers(enabled);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          enabled
+              ? 'Playing alongside other apps — start your audiobook in Audible '
+                  'or a video in YouTube, then press play here.'
+              : 'Playing on its own — other apps will pause when you play.',
+        ),
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   // ── Volume + master helpers ─────────────────────────────────────────────────
@@ -353,10 +384,10 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
     final draft = ref.read(mixerDraftProvider);
     final ui = ref.read(mixerUiProvider);
     final uid = ref.read(authStateProvider).valueOrNull?.uid ?? 'guest';
-    if (draft?.foreground == null || draft?.background == null) {
+    if (draft?.background == null) {
       if (!mounted) return false;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Two tracks are required')),
+        const SnackBar(content: Text('A background track is required')),
       );
       return false;
     }
@@ -368,9 +399,9 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
       sessionId: sid,
       uid: uid,
       title: draft.title,
-      foregroundAudioId: draft.foreground!.id,
+      foregroundAudioId: draft.foreground?.id ?? '',
       backgroundAudioId: draft.background!.id,
-      foregroundDisplayName: draft.foreground!.displayName,
+      foregroundDisplayName: draft.foreground?.displayName ?? '',
       backgroundDisplayName: draft.background!.displayName,
       foregroundVolume: ui.fgVolume,
       backgroundVolume: ui.bgVolume,
@@ -384,7 +415,7 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
       updatedAtMs: now,
       notes: draft.notes,
       syncStatus: previous?.syncStatus ?? 'local',
-      foregroundPath: draft.foreground!.localPath,
+      foregroundPath: draft.foreground?.localPath,
       backgroundPath: draft.background!.localPath,
       presetName: previous?.presetName,
       foregroundBassBoost: ui.fgBassBoost,
@@ -1225,7 +1256,8 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
 
   // ── Track Mixer card (both layers: badge + meter + volume) ──────────────────
 
-  Widget _tracksCard(MixerUiState ui, String fgName, String bgName) {
+  Widget _tracksCard(MixerUiState ui, String? fgName, String bgName) {
+    final bgOnly = fgName == null;
     return _ceramicSection(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1234,28 +1266,31 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _labelCap('Track Mixer'),
-              _labelCap('2 Layers', color: _glass.textMuted),
+              _labelCap(bgOnly ? '1 Layer' : '2 Layers',
+                  color: _glass.textMuted),
             ],
           ),
           const SizedBox(height: 4),
-          _trackMixRow(
-            badge: _gradientBadge(Icons.graphic_eq_rounded, _fgAccent),
-            name: 'Foreground: $fgName',
-            meterColor: _fgAccent.last,
-            volume: ui.fgVolume,
-            muted: ui.fgMuted,
-            active: ui.isPlaying && !ui.fgMuted,
-            durMs: ui.durationMs,
-            onVolume: (v) {
-              _setUi(ui.copyWith(fgVolume: v));
-              _pushVolumes();
-            },
-            onMute: () {
-              _setUi(ui.copyWith(fgMuted: !ui.fgMuted));
-              _pushVolumes();
-            },
-          ),
-          _hairline(),
+          if (!bgOnly) ...[
+            _trackMixRow(
+              badge: _gradientBadge(Icons.graphic_eq_rounded, _fgAccent),
+              name: 'Foreground: $fgName',
+              meterColor: _fgAccent.last,
+              volume: ui.fgVolume,
+              muted: ui.fgMuted,
+              active: ui.isPlaying && !ui.fgMuted,
+              durMs: ui.durationMs,
+              onVolume: (v) {
+                _setUi(ui.copyWith(fgVolume: v));
+                _pushVolumes();
+              },
+              onMute: () {
+                _setUi(ui.copyWith(fgMuted: !ui.fgMuted));
+                _pushVolumes();
+              },
+            ),
+            _hairline(),
+          ],
           _trackMixRow(
             badge: _gradientBadge(Icons.equalizer_rounded, _bgAccent),
             name: 'Background: $bgName',
@@ -1272,6 +1307,51 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
               _setUi(ui.copyWith(bgMuted: !ui.bgMuted));
               _pushVolumes();
             },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// "Play alongside other apps" toggle — lets our audio mix over Audible /
+  /// YouTube / Spotify instead of interrupting them.
+  Widget _companionCard(MixerUiState ui) {
+    return _ceramicSection(
+      child: Row(
+        children: [
+          _gradientBadge(Icons.hearing_rounded, _bgAccent),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Play alongside other apps',
+                  style: TextStyle(
+                    color: _glass.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  ui.mixWithOthers
+                      ? 'Mixes over Audible, YouTube, Spotify… without pausing them'
+                      : 'Currently takes over audio — other apps pause on play',
+                  style: TextStyle(
+                    color: _glass.textMuted,
+                    fontSize: 11.5,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Switch(
+            value: ui.mixWithOthers,
+            activeColor: _glass.accent,
+            onChanged: _setMixWithOthers,
           ),
         ],
       ),
@@ -1426,7 +1506,10 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        children: [seg('Foreground', false), seg('Background', true)],
+        // Background-only sessions have no foreground track to tune.
+        children: _bgOnly
+            ? [seg('Background', true)]
+            : [seg('Foreground', false), seg('Background', true)],
       ),
     );
   }
@@ -1910,6 +1993,7 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
         u.bgPositionMs,
         u.bgDurationMs,
         u.playbackSpeed,
+        u.mixWithOthers,
       );
 
   /// Mix controls — excludes position so scrolling stays smooth while playing.
@@ -1942,7 +2026,8 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
       );
     }
 
-    final hasTracks = draft?.foreground != null && draft?.background != null;
+    // Background is required; foreground is optional (background-only session).
+    final hasTracks = draft?.background != null;
     if (!hasTracks) {
       return _scaffold(
         appBar: _appBar(),
@@ -2006,7 +2091,7 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
                               const SizedBox(height: 18),
                               _tracksCard(
                                 ui,
-                                d.foreground!.displayName,
+                                d.foreground?.displayName,
                                 d.background!.displayName,
                               ),
                               const SizedBox(height: 12),
@@ -2040,17 +2125,27 @@ class _MixerTransportScreenState extends ConsumerState<MixerTransportScreen> {
     final title = _titleCtrl.text.trim().isEmpty
         ? 'Untitled session'
         : _titleCtrl.text.trim();
+    final bgOnly = draft.foreground == null;
+    final subtitle = bgOnly
+        ? draft.background!.displayName
+        : 'with ${draft.background!.displayName}';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _artworkSection(title),
         const SizedBox(height: 12),
-        _trackTitleInfo('with ${draft.background!.displayName}'),
+        _trackTitleInfo(subtitle),
         const SizedBox(height: 12),
         _playbackCard(progress, ui),
         _outputLowHint(ui),
         const SizedBox(height: 14),
-        _ambientBar(ui, draft.background!.displayName),
+        _companionCard(ui),
+        // In background-only sessions the background IS the main transport, so
+        // the separate ambient seek bar would just duplicate the player above.
+        if (!bgOnly) ...[
+          const SizedBox(height: 14),
+          _ambientBar(ui, draft.background!.displayName),
+        ],
       ],
     );
   }
