@@ -31,27 +31,89 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
   double _bgVol = 0.5;
   bool _fgLoop = false;
 
+  /// True when only a background track is loaded (no foreground audiobook). In
+  /// this mode the background player becomes the primary transport track.
+  bool _bgOnly = false;
+
+  /// When true the audio session is configured to mix with other apps' audio
+  /// (Audible, YouTube, Spotify…) instead of interrupting them.
+  bool _mixWithOthers = false;
+
   MixerAudioHandler() {
-    _fg.playbackEventStream.listen((_) => _broadcastState());
+    _fg.playbackEventStream.listen((_) {
+      if (!_bgOnly) _broadcastState();
+    });
     _fg.playerStateStream.listen((state) {
       // When FG finishes (loop off), reset both tracks to the start and pause
       // so the player returns to a clean, replayable state. (With loop on,
       // LoopMode.one restarts automatically and completed never fires.)
-      if (state.processingState == ProcessingState.completed && !_disposed) {
+      if (state.processingState == ProcessingState.completed &&
+          !_disposed &&
+          !_bgOnly) {
         _handleCompletion();
       }
-      _broadcastState();
+      if (!_bgOnly) _broadcastState();
+    });
+    // Mirror listeners on the background player for background-only sessions,
+    // where the background track is the primary (position/state) source.
+    _bg.playbackEventStream.listen((_) {
+      if (_bgOnly) _broadcastState();
+    });
+    _bg.playerStateStream.listen((state) {
+      if (state.processingState == ProcessingState.completed &&
+          !_disposed &&
+          _bgOnly) {
+        _handleCompletion();
+      }
+      if (_bgOnly) _broadcastState();
     });
     _initAudioSession();
   }
 
+  /// The player that drives the transport (position, duration, play state):
+  /// the foreground audiobook when present, otherwise the background track.
+  AudioPlayer get _primary => _bgOnly ? _bg : _fg;
+
+  /// Track id ('fg'/'bg') of the primary player for native effect calls.
+  String get _primaryId => _bgOnly ? 'bg' : 'fg';
+
+  /// Builds the audio-session configuration for the current mode. The default
+  /// ("music") takes over audio focus; the mix-with-others variant lets our
+  /// output layer on top of whatever else is playing.
+  AudioSessionConfiguration _sessionConfig() {
+    if (!_mixWithOthers) return const AudioSessionConfiguration.music();
+    return const AudioSessionConfiguration(
+      avAudioSessionCategory: AVAudioSessionCategory.playback,
+      avAudioSessionCategoryOptions: AVAudioSessionCategoryOptions.mixWithOthers,
+      avAudioSessionMode: AVAudioSessionMode.defaultMode,
+      androidAudioAttributes: AndroidAudioAttributes(
+        contentType: AndroidAudioContentType.music,
+        flags: AndroidAudioFlags.none,
+        usage: AndroidAudioUsage.media,
+      ),
+      androidAudioFocusGainType: AndroidAudioFocusGainType.gainTransientMayDuck,
+      androidWillPauseWhenDucked: false,
+    );
+  }
+
+  /// Toggles "play alongside other apps" mode and reconfigures the session.
+  Future<void> setMixWithOthers(bool enabled) async {
+    if (_mixWithOthers == enabled || _disposed) return;
+    _mixWithOthers = enabled;
+    final session = await AudioSession.instance;
+    await session.configure(_sessionConfig());
+  }
+
   Future<void> _initAudioSession() async {
     final session = await AudioSession.instance;
-    await session.configure(const AudioSessionConfiguration.music());
+    await session.configure(_sessionConfig());
     if (_interruptionsBound || _disposed) return;
     _interruptionsBound = true;
     session.interruptionEventStream.listen((event) {
       if (_disposed) return;
+      // In mix-with-others mode we deliberately keep playing alongside other
+      // apps, so we ignore focus-based interruptions.
+      if (_mixWithOthers) return;
       if (event.begin) {
         // Remember intent before pausing — camera, calls, and recording all
         // steal the audio session temporarily.
@@ -77,47 +139,49 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
 
   // ── Public streams (same API as the old MixerAudioService) ─────────────────
 
-  Stream<Duration> get positionStream => _fg.positionStream;
+  Stream<Duration> get positionStream =>
+      _bgOnly ? _bg.positionStream : _fg.positionStream;
   Stream<Duration> get bgPositionStream => _bg.positionStream;
-  Stream<bool> get playingStream => _fg.playingStream;
-  bool get isPlaying => _fg.playing;
-  Duration? get fgDuration => _fg.duration;
+  Stream<bool> get playingStream =>
+      _bgOnly ? _bg.playingStream : _fg.playingStream;
+  bool get isPlaying => _primary.playing;
+  Duration? get fgDuration => _bgOnly ? _bg.duration : _fg.duration;
   Duration? get bgDuration => _bg.duration;
 
   // ── Load ─────────────────────────────────────────────────────────────────────
 
   Future<void> load({
-    required String fgSource,
+    String? fgSource,
     required String bgSource,
-    required String fgTitle,
+    String? fgTitle,
     required String bgTitle,
     int startPositionMs = 0,
   }) async {
     if (_disposed) return;
 
-    final alreadyLoaded =
-        _loadedFgSource == fgSource && _loadedBgSource == bgSource;
+    final bgOnly = fgSource == null;
+    final alreadyLoaded = _loadedFgSource == fgSource &&
+        _loadedBgSource == bgSource &&
+        _bgOnly == bgOnly;
     if (alreadyLoaded) return;
+    _bgOnly = bgOnly;
 
     await _initAudioSession();
-    if (Platform.isAndroid) {
-      await Future.wait([
-        AudioEffectsChannel.closeEffects(trackId: 'fg'),
-        AudioEffectsChannel.closeEffects(trackId: 'bg'),
-      ]);
-    } else if (Platform.isIOS) {
-      await Future.wait([
-        AudioEffectsChannel.closeEffects(trackId: 'fg'),
-        AudioEffectsChannel.closeEffects(trackId: 'bg'),
-      ]);
-      _iosNativeReady = false;
-    }
+    await Future.wait([
+      AudioEffectsChannel.closeEffects(trackId: 'fg'),
+      AudioEffectsChannel.closeEffects(trackId: 'bg'),
+    ]);
+    if (Platform.isIOS) _iosNativeReady = false;
 
     try {
-      await Future.wait([
-        _fg.setAudioSource(AudioSource.uri(_toUri(fgSource))),
-        _bg.setAudioSource(AudioSource.uri(_toUri(bgSource))),
-      ]);
+      if (bgOnly) {
+        await _bg.setAudioSource(AudioSource.uri(_toUri(bgSource)));
+      } else {
+        await Future.wait([
+          _fg.setAudioSource(AudioSource.uri(_toUri(fgSource))),
+          _bg.setAudioSource(AudioSource.uri(_toUri(bgSource))),
+        ]);
+      }
     } on PlayerInterruptedException {
       // A newer load() (or a dispose/pause) superseded this one while the
       // sources were still loading — abort this stale load quietly.
@@ -125,10 +189,12 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
     }
     if (_disposed) return;
 
-    await _bg.setLoopMode(LoopMode.one);
+    // As an ambient bed under an audiobook the background loops; as the sole
+    // primary track it plays through and resets on completion.
+    await _bg.setLoopMode(bgOnly ? LoopMode.off : LoopMode.one);
 
     if (startPositionMs > 0) {
-      await _fg.seek(Duration(milliseconds: startPositionMs));
+      await _primary.seek(Duration(milliseconds: startPositionMs));
     }
 
     _loadedFgSource = fgSource;
@@ -136,74 +202,93 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
 
     // Update lock-screen / notification media item.
     mediaItem.add(MediaItem(
-      id: fgSource,
-      title: fgTitle,
-      artist: 'Background: $bgTitle',
-      duration: _fg.duration,
+      id: bgOnly ? bgSource : fgSource,
+      title: bgOnly ? bgTitle : (fgTitle ?? bgTitle),
+      artist: bgOnly ? 'Background sounds' : 'Background: $bgTitle',
+      duration: _primary.duration,
     ));
 
     if (Platform.isAndroid) {
       await _openAndroidEffects();
     } else if (Platform.isIOS) {
-      final fgBands = await AudioEffectsChannel.openEffects(
-        trackId: 'fg',
-        sessionId: 0,
-      );
       final bgBands = await AudioEffectsChannel.openEffects(
         trackId: 'bg',
         sessionId: 0,
       );
-      if (fgBands != null && bgBands != null) {
-        final fgOk = await AudioEffectsChannel.setTrackFile(
-          trackId: 'fg',
-          path: fgSource,
-        );
+      final fgBands = bgOnly
+          ? 0
+          : await AudioEffectsChannel.openEffects(
+              trackId: 'fg',
+              sessionId: 0,
+            );
+      if (bgBands != null && fgBands != null) {
         final bgOk = await AudioEffectsChannel.setTrackFile(
           trackId: 'bg',
           path: bgSource,
-          looping: true,
+          looping: !bgOnly,
         );
+        final fgOk = bgOnly
+            ? true
+            : await AudioEffectsChannel.setTrackFile(
+                trackId: 'fg',
+                path: fgSource,
+              );
         _iosNativeReady = fgOk && bgOk;
         if (_iosNativeReady) {
           // Native AVAudioEngine owns audible output; just_audio stays muted
           // for position / duration / UI sync only.
-          await Future.wait([_fg.setVolume(0), _bg.setVolume(0)]);
+          await _muteJustAudio();
           if (startPositionMs > 0) {
-            await Future.wait([
-              AudioEffectsChannel.seekTrack(
-                  trackId: 'fg', positionMs: startPositionMs),
-              AudioEffectsChannel.seekTrack(
-                  trackId: 'bg', positionMs: startPositionMs),
-            ]);
+            await AudioEffectsChannel.seekTrack(
+                trackId: _primaryId, positionMs: startPositionMs);
           }
         } else {
-          await Future.wait([_fg.setVolume(_fgVol), _bg.setVolume(_bgVol)]);
+          await _restoreJustAudioVolumes();
         }
       } else {
-        await Future.wait([_fg.setVolume(_fgVol), _bg.setVolume(_bgVol)]);
+        await _restoreJustAudioVolumes();
       }
     }
   }
 
-  /// Fall back to just_audio output when native engine fails on iOS.
-  Future<void> _iosFallbackToJustAudio() async {
-    _iosNativeReady = false;
-    await Future.wait([_fg.setVolume(_fgVol), _bg.setVolume(_bgVol)]);
+  /// Mute the just_audio players used only for UI sync on iOS.
+  Future<void> _muteJustAudio() async {
+    if (_bgOnly) {
+      await _bg.setVolume(0);
+    } else {
+      await Future.wait([_fg.setVolume(0), _bg.setVolume(0)]);
+    }
   }
 
+  /// Restore audible just_audio volumes (native iOS engine unavailable / off).
+  Future<void> _restoreJustAudioVolumes() async {
+    _iosNativeReady = false;
+    if (_bgOnly) {
+      await _bg.setVolume(_bgVol);
+    } else {
+      await Future.wait([_fg.setVolume(_fgVol), _bg.setVolume(_bgVol)]);
+    }
+  }
+
+  /// Fall back to just_audio output when native engine fails on iOS.
+  Future<void> _iosFallbackToJustAudio() => _restoreJustAudioVolumes();
+
   /// Android session IDs can be 0 briefly after setAudioSource — retry attach.
+  /// The foreground player is skipped entirely in background-only sessions.
   Future<void> _openAndroidEffects() async {
     for (var attempt = 0; attempt < 8; attempt++) {
       if (_disposed) return;
-      final fgSid = _fg.androidAudioSessionId;
+      final fgSid = _bgOnly ? null : _fg.androidAudioSessionId;
       final bgSid = _bg.androidAudioSessionId;
-      if (fgSid != null && fgSid != 0) {
+      if (!_bgOnly && fgSid != null && fgSid != 0) {
         await AudioEffectsChannel.openEffects(trackId: 'fg', sessionId: fgSid);
       }
       if (bgSid != null && bgSid != 0) {
         await AudioEffectsChannel.openEffects(trackId: 'bg', sessionId: bgSid);
       }
-      if (fgSid != null && fgSid != 0 && bgSid != null && bgSid != 0) return;
+      final fgReady = _bgOnly || (fgSid != null && fgSid != 0);
+      final bgReady = bgSid != null && bgSid != 0;
+      if (fgReady && bgReady) return;
       await Future.delayed(const Duration(milliseconds: 80));
     }
   }
@@ -231,23 +316,36 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
     if (_disposed) return;
     _userWantsPlayback = true;
     _pausedByInterruption = false;
-    final session = await AudioSession.instance;
-    await session.setActive(true);
+    // In mix-with-others mode on Android we deliberately do NOT request audio
+    // focus, so other apps (Audible, YouTube…) keep playing and Android mixes
+    // both streams at the output. iOS relies on the mixWithOthers category
+    // option instead, so activating the session there is safe.
+    if (!(_mixWithOthers && Platform.isAndroid)) {
+      final session = await AudioSession.instance;
+      await session.setActive(true);
+    }
     // just_audio leaves a completed track at its end and won't restart on
     // play() — rewind to the start first so the play button always works.
-    if (_fg.processingState == ProcessingState.completed) {
-      await _fg.seek(Duration.zero);
+    if (_primary.processingState == ProcessingState.completed) {
+      await _primary.seek(Duration.zero);
       if (Platform.isIOS && _iosNativeReady) {
-        await AudioEffectsChannel.seekTrack(trackId: 'fg', positionMs: 0);
+        await AudioEffectsChannel.seekTrack(trackId: _primaryId, positionMs: 0);
       }
     }
     if (Platform.isIOS && _iosNativeReady) {
-      final fgOk = await AudioEffectsChannel.playTrack(trackId: 'fg');
       final bgOk = await AudioEffectsChannel.playTrack(trackId: 'bg');
+      final fgOk =
+          _bgOnly ? true : await AudioEffectsChannel.playTrack(trackId: 'fg');
       if (!fgOk || !bgOk) {
         await _iosFallbackToJustAudio();
       }
-      await Future.wait([_fg.play(), _bg.play()]);
+    }
+    await _playLoaded();
+  }
+
+  Future<void> _playLoaded() async {
+    if (_bgOnly) {
+      await _bg.play();
     } else {
       await Future.wait([_fg.play(), _bg.play()]);
     }
@@ -259,12 +357,14 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
       _pausedByInterruption = false;
     }
     if (_disposed) return;
-    await Future.wait([_fg.pause(), _bg.pause()]);
+    if (_bgOnly) {
+      await _bg.pause();
+    } else {
+      await Future.wait([_fg.pause(), _bg.pause()]);
+    }
     if (Platform.isIOS && _iosNativeReady) {
-      await Future.wait([
-        AudioEffectsChannel.pauseTrack(trackId: 'fg'),
-        AudioEffectsChannel.pauseTrack(trackId: 'bg'),
-      ]);
+      await AudioEffectsChannel.pauseTrack(trackId: 'bg');
+      if (!_bgOnly) await AudioEffectsChannel.pauseTrack(trackId: 'fg');
     }
   }
 
@@ -272,18 +372,19 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
 
   Future<void> _seekFg(Duration position) async {
     if (_disposed) return;
-    await _fg.seek(position);
+    await _primary.seek(position);
     if (Platform.isIOS && _iosNativeReady) {
       await AudioEffectsChannel.seekTrack(
-          trackId: 'fg', positionMs: position.inMilliseconds);
+          trackId: _primaryId, positionMs: position.inMilliseconds);
     }
   }
 
-  /// Repeat the foreground (audiobook) track when it finishes.
+  /// Repeat the primary track (audiobook, or background in background-only
+  /// sessions) when it finishes.
   Future<void> setFgLoop(bool enabled) async {
     if (_disposed) return;
     _fgLoop = enabled;
-    await _fg.setLoopMode(enabled ? LoopMode.one : LoopMode.off);
+    await _primary.setLoopMode(enabled ? LoopMode.one : LoopMode.off);
   }
 
   Future<void> seekBg(Duration position) async {
@@ -301,6 +402,17 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
     if (_fgLoop) return;
     _userWantsPlayback = false;
     _pausedByInterruption = false;
+    if (_bgOnly) {
+      await _bg.pause();
+      await _bg.seek(Duration.zero);
+      if (Platform.isIOS && _iosNativeReady) {
+        await Future.wait([
+          AudioEffectsChannel.pauseTrack(trackId: 'bg'),
+          AudioEffectsChannel.seekTrack(trackId: 'bg', positionMs: 0),
+        ]);
+      }
+      return;
+    }
     await Future.wait([_fg.pause(), _bg.pause()]);
     await Future.wait([_fg.seek(Duration.zero), _bg.seek(Duration.zero)]);
     if (Platform.isIOS && _iosNativeReady) {
@@ -318,12 +430,16 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
   @override
   Future<void> setSpeed(double speed) async {
     if (_disposed) return;
-    await Future.wait([_fg.setSpeed(speed), _bg.setSpeed(speed)]);
+    if (_bgOnly) {
+      await _bg.setSpeed(speed);
+    } else {
+      await Future.wait([_fg.setSpeed(speed), _bg.setSpeed(speed)]);
+    }
     if (Platform.isIOS && _iosNativeReady) {
-      await Future.wait([
-        AudioEffectsChannel.setSpeedIOS(trackId: 'fg', speed: speed),
-        AudioEffectsChannel.setSpeedIOS(trackId: 'bg', speed: speed),
-      ]);
+      await AudioEffectsChannel.setSpeedIOS(trackId: 'bg', speed: speed);
+      if (!_bgOnly) {
+        await AudioEffectsChannel.setSpeedIOS(trackId: 'fg', speed: speed);
+      }
     }
   }
 
@@ -340,17 +456,18 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
     _fgVol = (fgMuted ? 0.0 : fgVolume * masterGain).clamp(0.0, 1.0);
     _bgVol = (bgMuted ? 0.0 : bgVolume * masterGain).clamp(0.0, 1.0);
     if (Platform.isIOS && _iosNativeReady) {
-      AudioEffectsChannel.setVolume(trackId: 'fg', volume: _fgVol);
       AudioEffectsChannel.setVolume(trackId: 'bg', volume: _bgVol);
+      if (!_bgOnly) AudioEffectsChannel.setVolume(trackId: 'fg', volume: _fgVol);
     } else {
-      _fg.setVolume(_fgVol);
       _bg.setVolume(_bgVol);
+      if (!_bgOnly) _fg.setVolume(_fgVol);
     }
   }
 
   // ── Effects ────────────────────────────────────────────────────────────────
 
   Future<void> applyFgEq(List<double> levels) async {
+    if (_bgOnly) return;
     if (Platform.isIOS && !_iosNativeReady) return;
     await AudioEffectsChannel.setEqBands(trackId: 'fg', levels: levels);
   }
@@ -361,6 +478,7 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   Future<void> applyFgBassBoost(double strength) async {
+    if (_bgOnly) return;
     if (Platform.isIOS && !_iosNativeReady) return;
     await AudioEffectsChannel.setBassBoost(trackId: 'fg', strength: strength);
   }
@@ -371,6 +489,7 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   Future<void> applyFgVirtualizer(double strength) async {
+    if (_bgOnly) return;
     if (Platform.isIOS && !_iosNativeReady) return;
     await AudioEffectsChannel.setVirtualizer(trackId: 'fg', strength: strength);
   }
@@ -381,6 +500,7 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   Future<void> applyFgLoudness(double gainDb) async {
+    if (_bgOnly) return;
     if (Platform.isIOS && !_iosNativeReady) return;
     await AudioEffectsChannel.setLoudness(trackId: 'fg', gainDb: gainDb);
   }
@@ -427,11 +547,12 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
   // ── Media session broadcast ────────────────────────────────────────────────
 
   void _broadcastState() {
-    final state = _fg.playerState;
+    final p = _primary;
+    final state = p.playerState;
     playbackState.add(playbackState.value.copyWith(
       controls: [
         MediaControl.skipToPrevious,
-        _fg.playing ? MediaControl.pause : MediaControl.play,
+        p.playing ? MediaControl.pause : MediaControl.play,
         MediaControl.skipToNext,
       ],
       systemActions: const {MediaAction.seek},
@@ -443,10 +564,10 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
         ProcessingState.ready => AudioProcessingState.ready,
         ProcessingState.completed => AudioProcessingState.completed,
       },
-      playing: _userWantsPlayback && _fg.playing,
-      updatePosition: _fg.position,
-      bufferedPosition: _fg.bufferedPosition,
-      speed: _fg.speed,
+      playing: _userWantsPlayback && p.playing,
+      updatePosition: p.position,
+      bufferedPosition: p.bufferedPosition,
+      speed: p.speed,
     ));
   }
 

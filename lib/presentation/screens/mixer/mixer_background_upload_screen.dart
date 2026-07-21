@@ -116,13 +116,16 @@ class _MixerBackgroundUploadScreenState
   }
 
   void _continue() {
-    if (_foreground == null || _background == null) {
-      setState(() => _error = 'Select foreground and background audio first.');
+    // Background is required; foreground is optional. A background-only session
+    // lets the app's soundscape play on its own — or alongside an audiobook in
+    // another app (Audible, YouTube…) via "Play alongside other apps".
+    if (_background == null) {
+      setState(() => _error = 'Select a background track to continue.');
       return;
     }
     // Duration may be 0 for user-picked tracks (will be updated by real player
     // after load in MixerTransportScreen). Fall back to 3-minute placeholder.
-    final fgMs = _foreground!.durationMs;
+    final fgMs = _foreground?.durationMs ?? 0;
     final bgMs = _background!.durationMs;
     final duration =
         fgMs > 0 || bgMs > 0 ? (fgMs > bgMs ? fgMs : bgMs) : 180000;
@@ -147,7 +150,8 @@ class _MixerBackgroundUploadScreenState
   @override
   Widget build(BuildContext context) {
     final glass = SaGlass.of(context);
-    final ready = _foreground != null && _background != null;
+    // Background is required; foreground is optional.
+    final ready = _background != null;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -166,7 +170,7 @@ class _MixerBackgroundUploadScreenState
                       const SizedBox(height: 14),
                       _TrackCard(
                   glass: glass,
-                  label: 'Foreground Track',
+                  label: 'Foreground Track (optional)',
                   icon: Icons.menu_book_rounded,
                   iconGradient: glass.isDark
                       ? const [Color(0xFF2E86E0), Color(0xFF0E4FC0)]
@@ -275,7 +279,7 @@ class _Header extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                'Select two audio tracks',
+                'Background required · foreground optional',
                 style: TextStyle(color: glass.textMuted, fontSize: 12),
               ),
             ],

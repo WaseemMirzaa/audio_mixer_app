@@ -127,6 +127,7 @@ class MixerUiState {
     double? bgVirtualizer,
     double? fgLoudness,
     double? bgLoudness,
+    this.mixWithOthers = false,
     this.loading = false,
     this.error,
   })  : fgVolume = fgVolume ?? MixerDefaults.fgVolume,
@@ -161,6 +162,9 @@ class MixerUiState {
   final double bgVirtualizer;
   final double fgLoudness;
   final double bgLoudness;
+  /// When true, the audio session is configured to play alongside audio from
+  /// other apps (Audible, YouTube, Spotify…) instead of interrupting them.
+  final bool mixWithOthers;
   final bool loading;
   final String? error;
 
@@ -184,6 +188,7 @@ class MixerUiState {
     double? bgVirtualizer,
     double? fgLoudness,
     double? bgLoudness,
+    bool? mixWithOthers,
     bool? loading,
     String? error,
   }) {
@@ -207,6 +212,7 @@ class MixerUiState {
       bgVirtualizer: bgVirtualizer ?? this.bgVirtualizer,
       fgLoudness: fgLoudness ?? this.fgLoudness,
       bgLoudness: bgLoudness ?? this.bgLoudness,
+      mixWithOthers: mixWithOthers ?? this.mixWithOthers,
       loading: loading ?? this.loading,
       error: error,
     );
