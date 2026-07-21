@@ -4,12 +4,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../domain/models/mixer_state.dart';
 import '../../../domain/models/track_ref.dart';
+import '../../../services/audio_import_service.dart';
+import '../../../services/incoming_shared_audio.dart';
 import '../../providers/providers.dart';
 import '../../widgets/sa_glass.dart';
 
@@ -23,14 +23,16 @@ class MixerBackgroundUploadScreen extends ConsumerStatefulWidget {
 
 class _MixerBackgroundUploadScreenState
     extends ConsumerState<MixerBackgroundUploadScreen> {
-  static const _allowed = {'mp3', 'wav', 'aac', 'm4a'};
-  static const _maxBytes = 100 * 1024 * 1024;
+  static const _allowed = AudioImportService.allowedExtensions;
+  static const _maxBytes = AudioImportService.maxBytes;
   String? _error;
   TrackRef? _foreground;
   TrackRef? _background;
   // Initial mix levels carried into the player.
   double _fgVolume = MixerDefaults.fgVolume;
   double _bgVolume = MixerDefaults.bgVolume;
+  bool _appliedSharedForeground = false;
+
   @override
   void initState() {
     super.initState();
@@ -40,7 +42,53 @@ class _MixerBackgroundUploadScreenState
       ref.read(mixerDraftProvider.notifier).state = null;
       ref.read(mixerReadyProvider.notifier).state = false;
       ref.read(mixerUiProvider.notifier).state = MixerUiState();
+      _consumePendingSharedForeground();
     });
+  }
+
+  /// Shared / Open-In audio becomes the foreground track; user still picks BG.
+  Future<void> _consumePendingSharedForeground() async {
+    if (_appliedSharedForeground) return;
+    final pending = ref.read(pendingSharedForegroundProvider);
+    if (pending == null) return;
+    _appliedSharedForeground = true;
+    ref.read(pendingSharedForegroundProvider.notifier).state = null;
+
+    setState(() => _error = null);
+    final ext = AudioImportService.extFromPath(pending.path);
+    if (ext == null) {
+      setState(() => _error = 'Unsupported shared format. Use mp3, wav, aac, or m4a.');
+      return;
+    }
+    final file = File(pending.path);
+    if (!file.existsSync()) {
+      setState(() => _error = 'Shared file is no longer available.');
+      return;
+    }
+    if (file.lengthSync() > _maxBytes) {
+      setState(() => _error = 'File too large (max 100MB).');
+      return;
+    }
+
+    try {
+      final localPath = await AudioImportService.copyToAppStorage(
+        sourcePath: pending.path,
+        ext: ext,
+      );
+      if (!mounted) return;
+      setState(() {
+        _foreground = TrackRef(
+          id: const Uuid().v4(),
+          localPath: localPath,
+          displayName: pending.displayName,
+          durationMs: 0,
+          mimeType: ext,
+        );
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = 'Failed to import shared file: $e');
+    }
   }
 
   Future<void> _pick(bool forForeground) async {
@@ -56,8 +104,9 @@ class _MixerBackgroundUploadScreenState
       setState(() => _error = 'Could not read file path.');
       return;
     }
-    final ext = f.extension?.toLowerCase() ?? '';
-    if (!_allowed.contains(ext)) {
+    final ext = AudioImportService.normalizeExt(f.extension) ??
+        AudioImportService.extFromPath(path);
+    if (ext == null) {
       setState(() => _error = 'Unsupported format.');
       return;
     }
@@ -74,7 +123,10 @@ class _MixerBackgroundUploadScreenState
     // remains valid after the file picker's temporary URI expires.
     String localPath;
     try {
-      localPath = await _copyToAppStorage(path, f.name, ext);
+      localPath = await AudioImportService.copyToAppStorage(
+        sourcePath: path,
+        ext: ext,
+      );
     } catch (e) {
       setState(() => _error = 'Failed to copy file: $e');
       return;
@@ -95,24 +147,6 @@ class _MixerBackgroundUploadScreenState
         _background = track;
       }
     });
-  }
-
-  /// Copies [sourcePath] into `<appDocs>/audio/` with a UUID filename and
-  /// returns the new path. Idempotent: if the file is already inside the app
-  /// docs directory, it is returned as-is without copying.
-  Future<String> _copyToAppStorage(
-      String sourcePath, String name, String ext) async {
-    final docsDir = await getApplicationDocumentsDirectory();
-    final audioDir = Directory(p.join(docsDir.path, 'audio'));
-    if (!audioDir.existsSync()) audioDir.createSync(recursive: true);
-
-    // If the file is already in our directory (e.g. re-selected), reuse it.
-    if (sourcePath.startsWith(audioDir.path)) return sourcePath;
-
-    final destName = '${const Uuid().v4()}.$ext';
-    final dest = File(p.join(audioDir.path, destName));
-    await File(sourcePath).copy(dest.path);
-    return dest.path;
   }
 
   void _continue() {
@@ -168,6 +202,17 @@ class _MixerBackgroundUploadScreenState
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
                     children: [
                       const SizedBox(height: 14),
+                      if (_foreground != null && _appliedSharedForeground) ...[
+                        Text(
+                          'Shared audio loaded as foreground — pick a background track to continue.',
+                          style: TextStyle(
+                            color: glass.textMuted,
+                            fontSize: 13,
+                            height: 1.35,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                       _TrackCard(
                   glass: glass,
                   label: 'Foreground Track (optional)',
@@ -176,11 +221,16 @@ class _MixerBackgroundUploadScreenState
                       ? const [Color(0xFF2E86E0), Color(0xFF0E4FC0)]
                       : const [Color(0xFF1DBEC8), Color(0xFF0D929E)],
                   track: _foreground,
-                  selectedSubtitle: 'Your audiobook or voice track',
+                  selectedSubtitle: _appliedSharedForeground
+                      ? 'Imported from another app'
+                      : 'Your audiobook or voice track',
                   onPick: () => _pick(true),
                   onClear: _foreground == null
                       ? null
-                      : () => setState(() => _foreground = null),
+                      : () => setState(() {
+                            _foreground = null;
+                            _appliedSharedForeground = false;
+                          }),
                 ),
                 const SizedBox(height: 12),
                 _TrackCard(

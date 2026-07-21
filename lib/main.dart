@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'audio_mixer_app.dart';
 import 'core/config/backend.dart';
 import 'presentation/providers/providers.dart';
+import 'services/incoming_shared_audio.dart';
 import 'services/mixer_audio_handler.dart';
 
 /// Toggle backend: [AppBackend.mock] for prototype; [AppBackend.firebase] uses
@@ -14,6 +15,7 @@ const AppBackend kAppBackend = AppBackend.firebase;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  IncomingSharedAudio.startListening();
 
   // Register our dual-player audio handler with the OS media session.
   // This replaces just_audio_background and supports multiple AudioPlayers.
@@ -37,12 +39,17 @@ void main() async {
   // Load SharedPreferences after audio init to avoid SQLITE_BUSY races.
   final prefs = await SharedPreferences.getInstance();
 
+  // Cold-start share (Open With / Share) — stash until splash / picker consume it.
+  final initialShared = await IncomingSharedAudio.takeInitial();
+
   runApp(
     ProviderScope(
       overrides: [
         prefsProvider.overrideWithValue(prefs),
         appBackendProvider.overrideWithValue(kAppBackend),
         mixerAudioHandlerProvider.overrideWithValue(handler),
+        if (initialShared != null)
+          pendingSharedForegroundProvider.overrideWith((ref) => initialShared),
       ],
       child: const AudioMixerApp(),
     ),

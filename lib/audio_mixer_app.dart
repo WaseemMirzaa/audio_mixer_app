@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,12 +9,38 @@ import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'presentation/providers/providers.dart';
 import 'presentation/widgets/app_ceramic_screen.dart';
+import 'services/incoming_shared_audio.dart';
 
-class AudioMixerApp extends ConsumerWidget {
+class AudioMixerApp extends ConsumerStatefulWidget {
   const AudioMixerApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AudioMixerApp> createState() => _AudioMixerAppState();
+}
+
+class _AudioMixerAppState extends ConsumerState<AudioMixerApp> {
+  StreamSubscription? _shareSub;
+
+  @override
+  void initState() {
+    super.initState();
+    // Warm-start shares while the app is already open.
+    _shareSub = IncomingSharedAudio.stream.listen((payload) {
+      ref.read(pendingSharedForegroundProvider.notifier).state = payload;
+      final router = ref.read(routerProvider);
+      // New session picker — shared file becomes foreground; user picks BG.
+      router.go('/picker');
+    });
+  }
+
+  @override
+  void dispose() {
+    _shareSub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
     final themeMode = ref.watch(themeModeProvider);
     final platformBrightness =

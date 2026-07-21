@@ -8,6 +8,7 @@ import '../../data/local/prefs_keys.dart';
 import '../providers/providers.dart';
 import '../widgets/app_logo.dart';
 import '../widgets/sa_glass.dart';
+import '../../services/incoming_shared_audio.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key, this.debugPreview});
@@ -51,6 +52,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
       final onboardingDone = prefs.getBool(PrefsKeys.onboardingDone) ?? false;
       if (!onboardingDone) {
         destination = '/onboarding';
+      } else if (ref.read(pendingSharedForegroundProvider) != null) {
+        // Shared audio — guests can start a session; saving still requires sign-in.
+        destination = '/picker';
       } else if (user == null) {
         destination = '/get-started';
       } else {
