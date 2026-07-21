@@ -20,8 +20,14 @@ import 'audio_effects_channel.dart';
 /// The background player loops automatically so a short ambient clip keeps
 /// playing for as long as the (typically longer) foreground audiobook runs.
 class MixerAudioService {
-  final _fg = AudioPlayer();
-  final _bg = AudioPlayer();
+  final _fg = AudioPlayer(
+    handleInterruptions: false,
+    handleAudioSessionActivation: false,
+  );
+  final _bg = AudioPlayer(
+    handleInterruptions: false,
+    handleAudioSessionActivation: false,
+  );
 
   String? _loadedFgSource;
   String? _loadedBgSource;

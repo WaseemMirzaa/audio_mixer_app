@@ -15,8 +15,16 @@ import 'audio_effects_channel.dart';
 ///   - Android: native AudioEffect session IDs
 ///   - iOS:     AVAudioEngine pipeline
 class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
-  final _fg = AudioPlayer();
-  final _bg = AudioPlayer();
+  // Interruptions + session activation are owned here so "Play alongside other
+  // apps" can keep playing when YouTube/Audible/etc. take audio focus.
+  final _fg = AudioPlayer(
+    handleInterruptions: false,
+    handleAudioSessionActivation: false,
+  );
+  final _bg = AudioPlayer(
+    handleInterruptions: false,
+    handleAudioSessionActivation: false,
+  );
 
   String? _loadedFgSource;
   String? _loadedBgSource;
@@ -91,6 +99,7 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
         flags: AndroidAudioFlags.none,
         usage: AndroidAudioUsage.media,
       ),
+      // Transient + may-duck: other apps can keep playing; we never pause on duck.
       androidAudioFocusGainType: AndroidAudioFocusGainType.gainTransientMayDuck,
       androidWillPauseWhenDucked: false,
     );
@@ -98,22 +107,60 @@ class MixerAudioHandler extends BaseAudioHandler with SeekHandler {
 
   /// Toggles "play alongside other apps" mode and reconfigures the session.
   Future<void> setMixWithOthers(bool enabled) async {
-    if (_mixWithOthers == enabled || _disposed) return;
+    if (_disposed) return;
     _mixWithOthers = enabled;
     final session = await AudioSession.instance;
     await session.configure(_sessionConfig());
+    if (Platform.isIOS) {
+      await AudioEffectsChannel.setMixWithOthers(enabled);
+    }
+    if (enabled) {
+      // Drop exclusive focus so YouTube / Audible / etc. can stay audible.
+      if (Platform.isAndroid) {
+        await session.setActive(false);
+      } else {
+        // Re-apply mixWithOthers category while staying active.
+        await session.setActive(true);
+      }
+      // If we were already playing, keep going after the session flip.
+      if (_userWantsPlayback && !_primary.playing) {
+        await _playBoth();
+      }
+    } else if (_userWantsPlayback) {
+      await session.setActive(true);
+    }
   }
 
   Future<void> _initAudioSession() async {
     final session = await AudioSession.instance;
     await session.configure(_sessionConfig());
+    if (Platform.isIOS) {
+      await AudioEffectsChannel.setMixWithOthers(_mixWithOthers);
+    }
     if (_interruptionsBound || _disposed) return;
     _interruptionsBound = true;
+    session.becomingNoisyEventStream.listen((_) {
+      if (_disposed) return;
+      // Headphones unplugged — always pause (even in companion mode).
+      _userWantsPlayback = false;
+      _pausedByInterruption = false;
+      _pauseBoth(userInitiated: true);
+    });
     session.interruptionEventStream.listen((event) {
       if (_disposed) return;
       // In mix-with-others mode we deliberately keep playing alongside other
-      // apps, so we ignore focus-based interruptions.
-      if (_mixWithOthers) return;
+      // apps, so we ignore focus-based interruptions (YouTube, Spotify, etc.).
+      // Phone calls still interrupt at the OS level when mixWithOthers is off;
+      // with mixWithOthers on, iOS typically doesn't interrupt for media apps.
+      if (_mixWithOthers) {
+        if (!event.begin &&
+            _userWantsPlayback &&
+            !_primary.playing) {
+          // Some OEMs still pause on focus loss — nudge playback back on.
+          _playBoth();
+        }
+        return;
+      }
       if (event.begin) {
         // Remember intent before pausing — camera, calls, and recording all
         // steal the audio session temporarily.

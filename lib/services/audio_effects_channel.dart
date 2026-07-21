@@ -137,6 +137,16 @@ class AudioEffectsChannel {
     } catch (_) {}
   }
 
+  /// iOS only. Sets whether the AVAudioEngine session mixes with other apps.
+  static Future<void> setMixWithOthers(bool enabled) async {
+    if (!Platform.isIOS) return;
+    try {
+      await _ch.invokeMethod<void>('setMixWithOthers', {
+        'enabled': enabled,
+      });
+    } catch (_) {}
+  }
+
   // ── 5-Band EQ ────────────────────────────────────────────────────────────
 
   /// [levels] is a list of dB values (±12 dB) — one per band.

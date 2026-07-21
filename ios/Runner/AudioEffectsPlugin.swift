@@ -143,6 +143,9 @@ class AudioEffectsPlugin: NSObject, FlutterPlugin {
     private let engine = AVAudioEngine()
     private var tracks: [String: TrackEngine] = [:]
     private var interruptionObserver: NSObjectProtocol?
+    /// Mirrors Flutter "Play alongside other apps" — keep session mixable and
+    /// do not pause native engines when other media apps take the route.
+    private var mixWithOthers = false
 
     override init() {
         super.init()
@@ -167,6 +170,8 @@ class AudioEffectsPlugin: NSObject, FlutterPlugin {
               let type = AVAudioSession.InterruptionType(rawValue: typeRaw) else { return }
         switch type {
         case .began:
+            // Companion mode: keep ambient audio running with YouTube / Audible / etc.
+            if mixWithOthers { return }
             for track in tracks.values {
                 pauseTrackSilently(track)
             }
@@ -255,6 +260,10 @@ class AudioEffectsPlugin: NSObject, FlutterPlugin {
         case "setLoudness":
             setLoudness(trackId: trackId, gainDb: args["gainDb"] as? Double ?? 0, result: result)
         case "setEnabled":
+            result(nil)
+        case "setMixWithOthers":
+            mixWithOthers = args["enabled"] as? Bool ?? false
+            configureAudioSession()
             result(nil)
         case "closeEffects":
             closeEffects(trackId: trackId, result: result)
@@ -415,7 +424,8 @@ class AudioEffectsPlugin: NSObject, FlutterPlugin {
 
     private func configureAudioSession() {
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .default, options: [])
+        let options: AVAudioSession.CategoryOptions = mixWithOthers ? [.mixWithOthers] : []
+        try? session.setCategory(.playback, mode: .default, options: options)
         try? session.setActive(true, options: [])
         engine.mainMixerNode.outputVolume = 1.0
     }
